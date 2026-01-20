@@ -177,9 +177,16 @@ class KeymapEditor(BasicEditor):
             btn.setEnabled(idx != self.current_layer)
             btn.setChecked(idx == self.current_layer)
 
+        widget_keycodes = {}
         for widget in self.container.widgets:
             code = self.code_for_widget(widget)
+            widget_keycodes[widget] = code
             KeycodeDisplay.display_keycode(widget, code)
+
+        combo_entries = []
+        if self.keyboard and getattr(self.keyboard, "combo_entries", None):
+            combo_entries = self.keyboard.combo_entries
+        self.container.set_combo_entries(combo_entries, widget_keycodes)
         self.container.update()
         self.container.updateGeometry()
 
