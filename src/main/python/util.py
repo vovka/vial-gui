@@ -200,6 +200,7 @@ class KeycodeDisplay:
         widget.setText(text)
         widget.setMaskText(mask_text)
         widget.setToolTip(tooltip)
+        widget.setFontScale(Keycode.get_font_scale(code))
         if cls.code_is_overriden(code):
             widget.setColor(QApplication.palette().color(QPalette.Link))
         else:

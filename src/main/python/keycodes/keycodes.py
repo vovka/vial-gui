@@ -16,11 +16,12 @@ class Keycode:
     protocol = 0
     hidden = False
 
-    def __init__(self, qmk_id, label, tooltip=None, masked=False, printable=None, recorder_alias=None, alias=None, requires_feature=None):
+    def __init__(self, qmk_id, label, tooltip=None, masked=False, printable=None, recorder_alias=None, alias=None, requires_feature=None, font_scale=1.0):
         self.qmk_id = qmk_id
         self.qmk_id_to_keycode[qmk_id] = self
         self.requires_feature = requires_feature
         self.label = label
+        self.font_scale = font_scale
         # we cannot embed full CJK fonts due to large size, workaround like this for now
         if sys.platform == "emscripten" and not label.isascii() and qmk_id != "KC_TRNS":
             self.label = qmk_id.replace("KC_", "")
@@ -103,6 +104,13 @@ class Keycode:
         if keycode.tooltip:
             tooltip = "{}: {}".format(tooltip, keycode.tooltip)
         return tooltip
+
+    @classmethod
+    def get_font_scale(cls, qmk_id):
+        keycode = cls.find_outer_keycode(qmk_id)
+        if keycode is None:
+            return 1.0
+        return keycode.font_scale
 
     @classmethod
     def serialize(cls, code):
@@ -928,6 +936,85 @@ def recreate_keyboard_keycodes(keyboard):
     # Hide keycodes where .requires_feature isn't supported by the keyboard.
     for kc in KEYCODES:
         kc.hidden = not kc.is_supported_by(keyboard)
+
+
+def get_macro_text_preview(actions, max_len=36):
+    """
+    Extract a text preview from macro actions.
+    Only considers ActionText for now. Returns None if no text content found.
+    """
+    text_parts = []
+    for action in actions:
+        # Check if it's a text action by looking at the tag
+        if hasattr(action, 'tag') and action.tag == 'text' and hasattr(action, 'text'):
+            text_parts.append(action.text)
+
+    if not text_parts:
+        return None
+
+    full_text = ''.join(text_parts)
+    if len(full_text) > max_len:
+        return full_text[:max_len - 1] + '…'
+    return full_text
+
+
+def format_macro_label(idx, preview, chars_per_line=8):
+    """
+    Format macro label with text preview split across up to 3 lines.
+    Format: M0\ntext or M0\nlong\ntext
+    """
+    if not preview:
+        return 'M{}'.format(idx)
+
+    # First line is just M0, text starts on second line
+    lines = ['M{}'.format(idx)]
+    remaining = preview
+
+    # Second line
+    if len(remaining) <= chars_per_line:
+        lines.append(remaining)
+        return '\n'.join(lines)
+
+    lines.append(remaining[:chars_per_line])
+    remaining = remaining[chars_per_line:]
+
+    # Third line (if needed)
+    if remaining:
+        if len(remaining) > chars_per_line:
+            remaining = remaining[:chars_per_line - 1] + '…'
+        lines.append(remaining)
+
+    return '\n'.join(lines)
+
+
+def update_macro_labels(keyboard):
+    """
+    Update macro keycode labels with text content preview.
+    Should be called after macros are loaded (reload_macros_late).
+    """
+    if not hasattr(keyboard, 'macro') or not keyboard.macro:
+        return
+
+    # Deserialize all macros to get their content
+    macros = keyboard.macros_deserialize(keyboard.macro)
+
+    for idx, macro_actions in enumerate(macros):
+        if idx >= len(KEYCODES_MACRO):
+            break
+
+        preview = get_macro_text_preview(macro_actions)
+        kc = KEYCODES_MACRO[idx]
+
+        if preview:
+            # Update the label to show macro content with smaller font
+            kc.label = format_macro_label(idx, preview)
+            kc.tooltip = 'Macro {}: "{}"'.format(idx, preview)
+            kc.font_scale = 0.7
+        else:
+            # Keep the default label for non-text macros
+            kc.label = 'M{}'.format(idx)
+            kc.tooltip = 'Macro {}'.format(idx)
+            kc.font_scale = 1.0
 
 
 recreate_keycodes()

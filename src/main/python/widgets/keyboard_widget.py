@@ -24,6 +24,7 @@ class KeyWidget:
         self.color = None
         self.mask_color = None
         self.scale = 0
+        self.font_scale = 1.0
 
         self.rotation_angle = desc.rotation_angle
 
@@ -195,6 +196,9 @@ class KeyWidget:
 
     def setMaskColor(self, color):
         self.mask_color = color
+
+    def setFontScale(self, scale):
+        self.font_scale = scale
 
     def __repr__(self):
         qualifiers = ["KeyboardWidget"]
@@ -459,8 +463,12 @@ class KeyboardWidget(QWidget):
                 qp.setPen(key.mask_color if key.mask_color else regular_pen)
                 qp.drawText(key.mask_rect, Qt.AlignCenter, key.mask_text)
             else:
-                # draw the legend
+                # draw the legend with optional font scaling
                 qp.setPen(key.color if key.color else regular_pen)
+                if key.font_scale != 1.0:
+                    scaled_font = qp.font()
+                    scaled_font.setPointSize(round(scaled_font.pointSize() * key.font_scale))
+                    qp.setFont(scaled_font)
                 qp.drawText(key.text_rect, Qt.AlignCenter, key.text)
 
             # draw the extra shape (encoder arrow)

@@ -4,6 +4,7 @@ import sys
 from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel
 
 from editor.basic_editor import BasicEditor
+from keycodes.keycodes import update_macro_labels
 from macro.macro_action import ActionText, ActionTap, ActionDown, ActionUp
 from macro.macro_action_ui import ui_action
 from macro.macro_key import KeyString, KeyDown, KeyUp, KeyTap
@@ -178,4 +179,5 @@ class MacroRecorder(BasicEditor):
     def on_save(self):
         Unlocker.unlock(self.device.keyboard)
         self.keyboard.set_macro(self.serialize())
+        update_macro_labels(self.keyboard)
         self.on_change()
