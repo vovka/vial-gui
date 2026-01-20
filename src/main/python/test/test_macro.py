@@ -3,7 +3,7 @@ import unittest
 
 from protocol.dummy_keyboard import DummyKeyboard
 from keycodes.keycodes import Keycode, recreate_keyboard_keycodes, update_macro_labels, \
-    get_macro_text_preview, format_macro_label, KEYCODES_MACRO
+    get_macro_text_preview, get_macro_key_preview, format_macro_label, KEYCODES_MACRO
 from macro.macro_action import ActionTap, ActionDown, ActionText, ActionDelay, ActionUp
 from macro.macro_key import KeyDown, KeyTap, KeyUp, KeyString
 from macro.macro_optimizer import remove_repeats, replace_with_tap, replace_with_string
@@ -169,29 +169,43 @@ class TestMacro(unittest.TestCase):
         actions = []
         self.assertIsNone(get_macro_text_preview(actions))
 
+    def test_macro_key_preview(self):
+        actions = [ActionTap(["KC_A"])]
+        self.assertEqual(get_macro_key_preview(actions), "A")
+
+        actions = [ActionDown(["KC_A"])]
+        self.assertEqual(get_macro_key_preview(actions), "A↓")
+
+        actions = [ActionUp(["KC_B"])]
+        self.assertEqual(get_macro_key_preview(actions), "B↑")
+
+        actions = [ActionDown(["KC_A", "KC_B"]), ActionTap(["KC_C"])]
+        self.assertEqual(get_macro_key_preview(actions), "A↓ B↓ C")
+
+        actions = [ActionDelay(10)]
+        self.assertIsNone(get_macro_key_preview(actions))
+
     def test_format_macro_label(self):
         # Short text fits on one line
-        self.assertEqual(format_macro_label(0, "hi"), 'M0("hi")')
+        self.assertEqual(format_macro_label(0, "hi"), "M0\nhi")
 
         # Medium text wraps to multiple lines
         label = format_macro_label(0, "git log -1")
-        self.assertTrue(label.startswith('M0("'))
-        self.assertTrue(label.endswith('")'))
+        self.assertTrue(label.startswith("M0\n"))
         # Text is split across lines, so check without newlines
         self.assertIn("git", label)
         self.assertIn("log -1", label)
 
         # Long text gets split across lines
         label = format_macro_label(12, "this is a longer text")
-        self.assertTrue(label.startswith('M12("'))
-        self.assertTrue(label.endswith('")'))
+        self.assertTrue(label.startswith("M12\n"))
         self.assertIn('\n', label)
 
         # Very long text gets truncated on third line
         label = format_macro_label(0, "a" * 50)
         lines = label.split('\n')
         self.assertLessEqual(len(lines), 3)
-        self.assertTrue(label.endswith('")'))
+        self.assertTrue(lines[-1].endswith('…'))
 
         # Empty preview returns simple label
         self.assertEqual(format_macro_label(5, None), 'M5')
@@ -200,29 +214,34 @@ class TestMacro(unittest.TestCase):
         kb = DummyKeyboard(None)
         kb.vial_protocol = 2
         kb.tap_dance_count = 0
-        kb.macro_count = 3
+        kb.macro_count = 4
         kb.macro_memory = 900
         recreate_keyboard_keycodes(kb)
 
-        # Set up macros: one text macro, one keycode macro, one empty
+        # Set up macros: one text macro, two keycode macros, one empty
         macro0 = kb.macro_serialize([ActionText("git log -1")])
         macro1 = kb.macro_serialize([ActionTap(["KC_A", "KC_B"])])
-        macro2 = b""
-        kb.macro = macro0 + b"\x00" + macro1 + b"\x00" + macro2 + b"\x00"
+        macro2 = kb.macro_serialize([ActionDown(["KC_C"])])
+        macro3 = b""
+        kb.macro = macro0 + b"\x00" + macro1 + b"\x00" + macro2 + b"\x00" + macro3 + b"\x00"
 
         update_macro_labels(kb)
 
-        # Macro 0 should have text preview in M0("...") format and smaller font
-        self.assertTrue(KEYCODES_MACRO[0].label.startswith('M0("'))
+        # Macro 0 should have text preview and smaller font
+        self.assertTrue(KEYCODES_MACRO[0].label.startswith("M0\n"))
         # Text wraps across lines, check parts are present
         self.assertIn("git", KEYCODES_MACRO[0].label)
         self.assertIn("log -1", KEYCODES_MACRO[0].label)
         self.assertEqual(KEYCODES_MACRO[0].font_scale, 0.7)
 
-        # Macro 1 (keycode only) should have default label and normal font
-        self.assertEqual(KEYCODES_MACRO[1].label, "M1")
-        self.assertEqual(KEYCODES_MACRO[1].font_scale, 1.0)
+        # Macro 1 (keycode tap) should show key preview and smaller font
+        self.assertEqual(KEYCODES_MACRO[1].label, "M1\nA B")
+        self.assertEqual(KEYCODES_MACRO[1].font_scale, 0.7)
 
-        # Macro 2 (empty) should have default label and normal font
-        self.assertEqual(KEYCODES_MACRO[2].label, "M2")
-        self.assertEqual(KEYCODES_MACRO[2].font_scale, 1.0)
+        # Macro 2 (key down) should show key preview with arrow and smaller font
+        self.assertEqual(KEYCODES_MACRO[2].label, "M2\nC↓")
+        self.assertEqual(KEYCODES_MACRO[2].font_scale, 0.7)
+
+        # Macro 3 (empty) should have default label and normal font
+        self.assertEqual(KEYCODES_MACRO[3].label, "M3")
+        self.assertEqual(KEYCODES_MACRO[3].font_scale, 1.0)

@@ -958,6 +958,42 @@ def get_macro_text_preview(actions, max_len=36):
     return full_text
 
 
+def get_macro_key_preview(actions, max_len=36):
+    """
+    Extract a key action preview from macro actions.
+    Shows key labels, adding arrows for down/up actions.
+    """
+    parts = []
+    for action in actions:
+        if not hasattr(action, "tag"):
+            continue
+        if action.tag not in ("down", "up", "tap"):
+            continue
+        sequence = getattr(action, "sequence", None)
+        if not sequence:
+            continue
+        arrow = ""
+        if action.tag == "down":
+            arrow = "↓"
+        elif action.tag == "up":
+            arrow = "↑"
+        for code in sequence:
+            label = _flatten_keycode_label(Keycode.label(code))
+            if not label:
+                continue
+            if arrow:
+                label = "{}{}".format(label, arrow)
+            parts.append(label)
+
+    if not parts:
+        return None
+
+    preview = " ".join(parts)
+    if len(preview) > max_len:
+        preview = preview[:max_len - 1] + "…"
+    return preview
+
+
 def format_macro_label(idx, preview, chars_per_line=8):
     """
     Format macro label with text preview split across up to 3 lines.
@@ -989,7 +1025,7 @@ def format_macro_label(idx, preview, chars_per_line=8):
 
 def update_macro_labels(keyboard):
     """
-    Update macro keycode labels with text content preview.
+    Update macro keycode labels with text or key action preview.
     Should be called after macros are loaded (reload_macros_late).
     """
     if not hasattr(keyboard, 'macro') or not keyboard.macro:
@@ -1011,10 +1047,16 @@ def update_macro_labels(keyboard):
             kc.tooltip = 'Macro {}: "{}"'.format(idx, preview)
             kc.font_scale = 0.7
         else:
-            # Keep the default label for non-text macros
-            kc.label = 'M{}'.format(idx)
-            kc.tooltip = 'Macro {}'.format(idx)
-            kc.font_scale = 1.0
+            key_preview = get_macro_key_preview(macro_actions)
+            if key_preview:
+                kc.label = format_macro_label(idx, key_preview)
+                kc.tooltip = 'Macro {}: {}'.format(idx, key_preview)
+                kc.font_scale = 0.7
+            else:
+                # Keep the default label for non-text macros
+                kc.label = 'M{}'.format(idx)
+                kc.tooltip = 'Macro {}'.format(idx)
+                kc.font_scale = 1.0
 
 
 def _flatten_keycode_label(label):
