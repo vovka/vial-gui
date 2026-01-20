@@ -4,7 +4,8 @@ import json
 import lzma
 from collections import OrderedDict
 
-from keycodes.keycodes import RESET_KEYCODE, Keycode, recreate_keyboard_keycodes, update_macro_labels
+from keycodes.keycodes import RESET_KEYCODE, Keycode, recreate_keyboard_keycodes, update_macro_labels, \
+    update_tap_dance_labels
 from kle_serial import Serial as KleSerial
 from protocol.alt_repeat_key import ProtocolAltRepeatKey
 from protocol.combo import ProtocolCombo
@@ -95,6 +96,7 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
         self.reload_macros_late()
         update_macro_labels(self)
         self.reload_tap_dance()
+        update_tap_dance_labels(self)
         self.reload_combo()
         self.reload_key_override()
         self.reload_alt_repeat_key()

@@ -818,7 +818,7 @@ def recreate_keycodes():
     KEYCODES.clear()
     KEYCODES.extend(KEYCODES_SPECIAL + KEYCODES_BASIC + KEYCODES_SHIFTED + KEYCODES_ISO + KEYCODES_LAYERS +
                     KEYCODES_BOOT + KEYCODES_MODIFIERS + KEYCODES_QUANTUM + KEYCODES_BACKLIGHT + KEYCODES_MEDIA +
-                    KEYCODES_TAP_DANCE + KEYCODES_MACRO + KEYCODES_USER + KEYCODES_HIDDEN + KEYCODES_MIDI)
+                    KEYCODES_HIDDEN + KEYCODES_TAP_DANCE + KEYCODES_MACRO + KEYCODES_USER + KEYCODES_MIDI)
     KEYCODES_MAP.clear()
     RAWCODES_MAP.clear()
     for keycode in KEYCODES:
@@ -1015,6 +1015,50 @@ def update_macro_labels(keyboard):
             kc.label = 'M{}'.format(idx)
             kc.tooltip = 'Macro {}'.format(idx)
             kc.font_scale = 1.0
+
+
+def _flatten_keycode_label(label):
+    if not label:
+        return ""
+    label = label.replace("\n", " ").strip()
+    if not label:
+        return ""
+    return " ".join(label.split())
+
+
+def _tap_dance_font_scale(line_count):
+    if line_count <= 1:
+        return 1.0
+    if line_count <= 3:
+        return 0.6
+    if line_count <= 4:
+        return 0.55
+    return 0.5
+
+
+def format_tap_dance_label(idx, entry):
+    if not entry:
+        return "TD({})".format(idx)
+    lines = ["TD({})".format(idx)]
+    for prefix, code in [(".", entry[0]), ("..", entry[2]), ("._", entry[3]), ("_", entry[1])]:
+        label = _flatten_keycode_label(Keycode.label(code))
+        if not label:
+            continue
+        lines.append("{} {}".format(prefix, label))
+    return "\n".join(lines)
+
+
+def update_tap_dance_labels(keyboard):
+    """
+    Update tap dance keycode labels to include action previews.
+    Should be called after tap dance entries are loaded or changed.
+    """
+    entries = getattr(keyboard, "tap_dance_entries", [])
+    for idx, kc in enumerate(KEYCODES_TAP_DANCE):
+        entry = entries[idx] if idx < len(entries) else None
+        label = format_tap_dance_label(idx, entry)
+        kc.label = label
+        kc.font_scale = _tap_dance_font_scale(label.count("\n") + 1)
 
 
 recreate_keycodes()

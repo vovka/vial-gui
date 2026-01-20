@@ -7,7 +7,7 @@ import time
 from logging.handlers import RotatingFileHandler
 
 from PyQt5.QtCore import QCoreApplication, QStandardPaths
-from PyQt5.QtGui import QPalette
+from PyQt5.QtGui import QPalette, QFont
 from PyQt5.QtWidgets import QApplication, QWidget, QScrollArea, QFrame
 
 from hidproxy import hid
@@ -226,7 +226,16 @@ class KeycodeDisplay:
         cls.clients.remove(client)
 
     @classmethod
+    def refresh_clients(cls):
+        for client in cls.clients:
+            client.on_keymap_override()
+
+    @classmethod
     def relabel_buttons(cls, buttons):
+        base_font = QApplication.font()
+        base_size = base_font.pointSizeF()
+        if base_size <= 0:
+            base_size = float(base_font.pointSize())
         for widget in buttons:
             qmk_id = widget.keycode.qmk_id
             if qmk_id in KeycodeDisplay.keymap_override:
@@ -236,4 +245,7 @@ class KeycodeDisplay:
             else:
                 label = widget.keycode.label
                 widget.setStyleSheet("QPushButton {}")
+            font = QFont(base_font)
+            font.setPointSizeF(base_size * Keycode.get_font_scale(qmk_id))
+            widget.setFont(font)
             widget.setText(label.replace("&", "&&"))

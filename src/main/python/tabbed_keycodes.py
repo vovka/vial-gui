@@ -33,6 +33,7 @@ class AlternativeDisplay(QWidget):
             for title, code in prefix_buttons:
                 btn = SquareButton()
                 btn.setRelSize(KEYCODE_BTN_RATIO)
+                btn.setSizeHintBase()
                 btn.setText(title)
                 btn.clicked.connect(lambda st, k=code: self.keycode_changed.emit(title))
                 self.key_layout.addWidget(btn)
@@ -57,6 +58,7 @@ class AlternativeDisplay(QWidget):
                 continue
             btn = SquareButton()
             btn.setRelSize(KEYCODE_BTN_RATIO)
+            btn.setSizeHintBase()
             btn.setToolTip(Keycode.tooltip(keycode.qmk_id))
             btn.clicked.connect(lambda st, k=keycode: self.keycode_changed.emit(k.qmk_id))
             btn.keycode = keycode

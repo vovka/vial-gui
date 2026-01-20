@@ -28,6 +28,7 @@ class DisplayKeyboard(QWidget):
             btn = SquareButton()
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             btn.setRelSize(KEYCODE_BTN_RATIO)
+            btn.setSizeHintBase()
             btn.setContentsMargins(0, 0, 0, 0)
             btn.setToolTip(Keycode.tooltip(kc.qmk_id))
             btn.setText(kc.label)

@@ -12,6 +12,7 @@ class SquareButton(QPushButton):
         self.label = None
         self.word_wrap = False
         self.text = ""
+        self.size_hint_base = None
 
     def setRelSize(self, ratio):
         self.scale = ratio
@@ -22,7 +23,8 @@ class SquareButton(QPushButton):
         self.setText(self.text)
 
     def sizeHint(self):
-        size = int(round(self.fontMetrics().height() * self.scale))
+        base_height = self.size_hint_base if self.size_hint_base is not None else self.fontMetrics().height()
+        size = int(round(base_height * self.scale))
         return QSize(size, size)
 
     # Override setText to facilitate automatic word wrapping
@@ -44,3 +46,9 @@ class SquareButton(QPushButton):
                 self.label.hide()
                 self.label.deleteLater()
             super().setText(text)
+
+    def setSizeHintBase(self, base_height=None):
+        if base_height is None:
+            base_height = self.fontMetrics().height()
+        self.size_hint_base = base_height
+        self.updateGeometry()

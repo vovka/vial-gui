@@ -1,4 +1,5 @@
 from collections import defaultdict
+import re
 
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QTransform, QBrush, QPolygonF, QPalette
 from PyQt5.QtWidgets import QWidget, QToolTip, QApplication
@@ -469,7 +470,60 @@ class KeyboardWidget(QWidget):
                     scaled_font = qp.font()
                     scaled_font.setPointSize(round(scaled_font.pointSize() * key.font_scale))
                     qp.setFont(scaled_font)
-                qp.drawText(key.text_rect, Qt.AlignCenter, key.text)
+                if "\n" in key.text:
+                    lines = key.text.split("\n")
+                    has_td_header = lines and lines[0].startswith("TD(")
+                    action_lines = []
+                    for line in lines[1:]:
+                        match = re.match(r"^([._]+)\s*(.*)$", line)
+                        if match:
+                            action_lines.append((match.group(1), match.group(2)))
+                        else:
+                            action_lines.append((None, line))
+                    has_tap_dance_lines = any(prefix for prefix, _ in action_lines)
+                    if has_td_header and has_tap_dance_lines:
+                        fm = qp.fontMetrics()
+                        text_width = fm.horizontalAdvance if hasattr(fm, "horizontalAdvance") else fm.width
+                        line_height = fm.height()
+                        total_height = line_height * len(lines)
+                        start_y = key.text_rect.y() + (key.text_rect.height() - total_height) / 2
+                        left_pad = max(2, round(key.size * SHADOW_SIDE_PADDING))
+                        prefix_width = max(
+                            (text_width(prefix) for prefix, _ in action_lines if prefix),
+                            default=0
+                        )
+                        gap = max(2, text_width(" "))
+                        base_x = key.text_rect.x() + left_pad
+                        available_width = key.text_rect.width() - left_pad
+                        for i, line in enumerate(lines):
+                            line_y = round(start_y + (i * line_height))
+                            if i == 0:
+                                line_rect = QRect(
+                                    key.text_rect.x(),
+                                    line_y,
+                                    key.text_rect.width(),
+                                    line_height
+                                )
+                                qp.drawText(line_rect, Qt.AlignHCenter | Qt.AlignVCenter, line)
+                                continue
+                            prefix, body = action_lines[i - 1]
+                            if prefix:
+                                prefix_rect = QRect(base_x, line_y, prefix_width, line_height)
+                                body_rect = QRect(
+                                    base_x + prefix_width + gap,
+                                    line_y,
+                                    max(0, available_width - prefix_width - gap),
+                                    line_height
+                                )
+                                qp.drawText(prefix_rect, Qt.AlignLeft | Qt.AlignVCenter, prefix)
+                                qp.drawText(body_rect, Qt.AlignLeft | Qt.AlignVCenter, body)
+                            else:
+                                line_rect = QRect(base_x, line_y, available_width, line_height)
+                                qp.drawText(line_rect, Qt.AlignLeft | Qt.AlignVCenter, line)
+                    else:
+                        qp.drawText(key.text_rect, Qt.AlignCenter, key.text)
+                else:
+                    qp.drawText(key.text_rect, Qt.AlignCenter, key.text)
 
             # draw the extra shape (encoder arrow)
             qp.setPen(extra_pen)

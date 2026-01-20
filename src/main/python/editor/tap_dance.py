@@ -5,9 +5,10 @@ from PyQt5.QtWidgets import QTabWidget, QWidget, QSizePolicy, QGridLayout, QVBox
     QPushButton, QSpinBox
 
 from protocol.constants import VIAL_PROTOCOL_DYNAMIC
+from keycodes.keycodes import update_tap_dance_labels
 from widgets.key_widget import KeyWidget
 from tabbed_keycodes import TabbedKeycodes
-from util import tr
+from util import tr, KeycodeDisplay
 from vial_device import VialKeyboard
 from editor.basic_editor import BasicEditor
 from widgets.tab_widget_keycodes import TabWidgetWithKeycodes
@@ -140,11 +141,15 @@ class TapDance(BasicEditor):
     def on_save(self):
         for x, e in enumerate(self.tap_dance_entries):
             self.keyboard.tap_dance_set(x, self.tap_dance_entries[x].save())
+        update_tap_dance_labels(self.keyboard)
+        KeycodeDisplay.refresh_clients()
         self.update_modified_state()
 
     def on_revert(self):
         self.keyboard.reload_dynamic()
         self.reload_ui()
+        update_tap_dance_labels(self.keyboard)
+        KeycodeDisplay.refresh_clients()
 
     def rebuild(self, device):
         super().rebuild(device)
