@@ -93,7 +93,14 @@ class Keycode:
         keycode = cls.find_outer_keycode(qmk_id)
         if keycode is None:
             return qmk_id
-        return keycode.label
+        label = keycode.label
+        if cls.is_mask(qmk_id):
+            inner = cls.find_inner_keycode(qmk_id)
+            if inner and inner.qmk_id != "KC_NO" and "(kc)" in label:
+                inner_label = cls.label(inner.qmk_id)
+                if inner_label:
+                    label = label.replace("(kc)", inner_label)
+        return label
 
     @classmethod
     def tooltip(cls, qmk_id):

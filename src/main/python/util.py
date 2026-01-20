@@ -176,8 +176,16 @@ class KeycodeDisplay:
     def get_label(cls, code):
         """ Get label for a specific keycode """
         if cls.code_is_overriden(code):
-            return cls.keymap_override[Keycode.find_outer_keycode(code).qmk_id]
-        return Keycode.label(code)
+            label = cls.keymap_override[Keycode.find_outer_keycode(code).qmk_id]
+        else:
+            label = Keycode.label(code)
+        if Keycode.is_mask(code):
+            inner = Keycode.find_inner_keycode(code)
+            if inner and inner.qmk_id != "KC_NO" and "(kc)" in label:
+                inner_label = cls.get_label(inner.qmk_id)
+                if inner_label:
+                    label = label.replace("(kc)", inner_label)
+        return label
 
     @classmethod
     def code_is_overriden(cls, code):
