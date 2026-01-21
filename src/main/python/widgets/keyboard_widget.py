@@ -842,6 +842,8 @@ class KeyboardWidget(QWidget):
                 QToolTip.showText(ev.globalPos(), key.tooltip)
             else:
                 QToolTip.hideText()
+        elif ev.type() in (QEvent.FontChange, QEvent.ApplicationFontChange):
+            self.update_layout()
         elif ev.type() == QEvent.LayoutRequest:
             self.update_layout()
         elif ev.type() == QEvent.MouseButtonDblClick and self.active_key:

@@ -4,7 +4,7 @@ import platform
 from json import JSONDecodeError
 
 from PyQt5.QtCore import Qt, QSettings, QStandardPaths, QTimer, QRect, QT_VERSION_STR
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QFont
 from PyQt5.QtWidgets import QWidget, QComboBox, QToolButton, QHBoxLayout, QVBoxLayout, QMainWindow, QAction, qApp, \
     QFileDialog, QDialog, QTabWidget, QActionGroup, QMessageBox, QLabel, QShortcut
 
@@ -60,6 +60,10 @@ class MainWindow(QMainWindow):
             self.showMaximized()
 
         themes.Theme.set_theme(self.get_theme())
+
+        self._base_font = qApp.font()
+        self.ui_zoom = self._load_ui_zoom()
+        self._apply_ui_zoom(self.ui_zoom, persist=False)
 
         self.combobox_devices = QComboBox()
         self.combobox_devices.currentIndexChanged.connect(self.on_device_selected)
@@ -213,6 +217,18 @@ class MainWindow(QMainWindow):
         # check "QWERTY" if nothing else is selected
         if keymap_group.checkedAction() is None:
             keymap_group.actions()[0].setChecked(True)
+
+        zoom_in_act = QAction(tr("MenuView", "Zoom in"), self)
+        zoom_in_act.setShortcut(QKeySequence.ZoomIn)
+        zoom_in_act.triggered.connect(self.zoom_in)
+
+        zoom_out_act = QAction(tr("MenuView", "Zoom out"), self)
+        zoom_out_act.setShortcut(QKeySequence.ZoomOut)
+        zoom_out_act.triggered.connect(self.zoom_out)
+
+        view_menu = self.menuBar().addMenu(tr("Menu", "View"))
+        view_menu.addAction(zoom_in_act)
+        view_menu.addAction(zoom_out_act)
 
         self.security_menu = self.menuBar().addMenu(tr("Menu", "Security"))
         self.security_menu.addAction(keyboard_unlock_act)
@@ -424,6 +440,45 @@ class MainWindow(QMainWindow):
         msg = QMessageBox()
         msg.setText(tr("MainWindow", "In order to fully apply the theme you should restart the application."))
         msg.exec_()
+
+    def _load_ui_zoom(self):
+        value = self.settings.value("ui_zoom", None)
+        if value is None:
+            return 1.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 1.0
+
+    def _apply_ui_zoom(self, zoom, persist=True):
+        zoom = max(0.1, float(zoom))
+        zoom = round(zoom, 2)
+        self.ui_zoom = zoom
+
+        font = QFont(self._base_font)
+        base_size = font.pointSizeF()
+        use_pixels = False
+        if base_size <= 0:
+            base_size = float(font.pixelSize())
+            use_pixels = True
+        if base_size <= 0:
+            base_size = 10.0
+            use_pixels = False
+        if use_pixels:
+            font.setPixelSize(max(1, int(round(base_size * zoom))))
+        else:
+            font.setPointSizeF(base_size * zoom)
+        qApp.setFont(font)
+        KeycodeDisplay.refresh_clients()
+
+        if persist:
+            self.settings.setValue("ui_zoom", zoom)
+
+    def zoom_in(self):
+        self._apply_ui_zoom(self.ui_zoom * 1.1)
+
+    def zoom_out(self):
+        self._apply_ui_zoom(self.ui_zoom * 0.9)
 
     def on_tab_changed(self, index):
         TabbedKeycodes.close_tray()
