@@ -1089,7 +1089,7 @@ def format_tap_dance_label(idx, entry):
     if not entry:
         return "TD({})".format(idx)
     lines = ["TD({})".format(idx)]
-    for prefix, code in [(".", entry[0]), ("..", entry[2]), ("._", entry[3]), ("_", entry[1])]:
+    for prefix, code in [(".", entry[0]), ("_", entry[1]), ("..", entry[2]), ("._", entry[3])]:
         label = _flatten_keycode_label(Keycode.label(code))
         if not label:
             continue
