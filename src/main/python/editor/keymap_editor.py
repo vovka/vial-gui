@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import json
 
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QMessageBox, QWidget
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QMessageBox, QWidget, QShortcut
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QKeySequence
 
 from any_keycode_dialog import AnyKeycodeDialog
 from editor.basic_editor import BasicEditor
@@ -56,6 +57,8 @@ class KeymapEditor(BasicEditor):
         self.layer_buttons = []
         self.keyboard = None
         self.current_layer = 0
+        self.layer_shortcuts = []
+        self._shortcut_parent = None
 
         layout_editor.changed.connect(self.on_layout_changed)
 
@@ -70,6 +73,15 @@ class KeymapEditor(BasicEditor):
 
         self.device = None
         KeycodeDisplay.notify_keymap_override(self)
+
+    def activate(self):
+        self._ensure_layer_shortcuts()
+        for shortcut in self.layer_shortcuts:
+            shortcut.setEnabled(True)
+
+    def deactivate(self):
+        for shortcut in self.layer_shortcuts:
+            shortcut.setEnabled(False)
 
     def on_empty_space_clicked(self):
         self.container.deselect()
@@ -260,3 +272,29 @@ class KeymapEditor(BasicEditor):
 
     def on_keymap_override(self):
         self.refresh_layer_display()
+
+    def _ensure_layer_shortcuts(self):
+        parent = self.parentWidget() or self.container
+        if parent is None:
+            return
+        if self._shortcut_parent is parent and self.layer_shortcuts:
+            return
+
+        for shortcut in self.layer_shortcuts:
+            shortcut.deleteLater()
+        self.layer_shortcuts = []
+        self._shortcut_parent = parent
+
+        for digit in range(1, 10):
+            idx = digit - 1
+            shortcut = QShortcut(QKeySequence("Alt+{}".format(digit)), parent)
+            shortcut.setContext(Qt.ApplicationShortcut)
+            shortcut.activated.connect(lambda idx=idx: self._switch_layer_shortcut(idx))
+            self.layer_shortcuts.append(shortcut)
+
+    def _switch_layer_shortcut(self, idx):
+        if self.keyboard is None:
+            return
+        if idx < 0 or idx >= self.keyboard.layers:
+            return
+        self.switch_layer(idx)
