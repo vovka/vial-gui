@@ -6,7 +6,7 @@ from json import JSONDecodeError
 from PyQt5.QtCore import Qt, QSettings, QStandardPaths, QTimer, QRect, QT_VERSION_STR
 from PyQt5.QtGui import QKeySequence, QFont
 from PyQt5.QtWidgets import QWidget, QComboBox, QToolButton, QHBoxLayout, QVBoxLayout, QMainWindow, QAction, qApp, \
-    QFileDialog, QDialog, QTabWidget, QActionGroup, QMessageBox, QLabel, QShortcut
+    QFileDialog, QDialog, QTabWidget, QActionGroup, QMessageBox, QLabel
 
 import os
 import sys
@@ -104,8 +104,6 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         self.refresh_tabs()
-        self._init_tab_shortcuts()
-
         no_devices = 'No devices detected. Connect a Vial-compatible device and press "Refresh"<br>' \
                      'or select "File" → "Download VIA definitions" in order to enable support for VIA keyboards.'
         if sys.platform.startswith("linux"):
@@ -218,17 +216,62 @@ class MainWindow(QMainWindow):
         if keymap_group.checkedAction() is None:
             keymap_group.actions()[0].setChecked(True)
 
-        zoom_in_act = QAction(tr("MenuView", "Zoom in"), self)
+        prev_tab_act = QAction(tr("MenuNavigation", "Previous tab"), self)
+        prev_tab_act.setShortcut(QKeySequence("Ctrl+PgUp"))
+        prev_tab_act.setShortcutContext(Qt.WindowShortcut)
+        prev_tab_act.triggered.connect(lambda: self._step_tab(-1))
+
+        next_tab_act = QAction(tr("MenuNavigation", "Next tab"), self)
+        next_tab_act.setShortcut(QKeySequence("Ctrl+PgDown"))
+        next_tab_act.setShortcutContext(Qt.WindowShortcut)
+        next_tab_act.triggered.connect(lambda: self._step_tab(1))
+
+        prev_subtab_act = QAction(tr("MenuNavigation", "Previous subtab"), self)
+        prev_subtab_act.setShortcut(QKeySequence("Alt+PgUp"))
+        prev_subtab_act.setShortcutContext(Qt.WindowShortcut)
+        prev_subtab_act.triggered.connect(lambda: self._step_subtab(-1))
+
+        next_subtab_act = QAction(tr("MenuNavigation", "Next subtab"), self)
+        next_subtab_act.setShortcut(QKeySequence("Alt+PgDown"))
+        next_subtab_act.setShortcutContext(Qt.WindowShortcut)
+        next_subtab_act.triggered.connect(lambda: self._step_subtab(1))
+
+        zoom_in_act = QAction(tr("MenuNavigation", "Zoom in"), self)
         zoom_in_act.setShortcut(QKeySequence.ZoomIn)
+        zoom_in_act.setShortcutContext(Qt.WindowShortcut)
         zoom_in_act.triggered.connect(self.zoom_in)
 
-        zoom_out_act = QAction(tr("MenuView", "Zoom out"), self)
+        zoom_out_act = QAction(tr("MenuNavigation", "Zoom out"), self)
         zoom_out_act.setShortcut(QKeySequence.ZoomOut)
+        zoom_out_act.setShortcutContext(Qt.WindowShortcut)
         zoom_out_act.triggered.connect(self.zoom_out)
 
-        view_menu = self.menuBar().addMenu(tr("Menu", "View"))
-        view_menu.addAction(zoom_in_act)
-        view_menu.addAction(zoom_out_act)
+        navigation_menu = self.menuBar().addMenu(tr("Menu", "Navigation"))
+        navigation_menu.addAction(prev_tab_act)
+        navigation_menu.addAction(next_tab_act)
+        navigation_menu.addSeparator()
+        navigation_menu.addAction(prev_subtab_act)
+        navigation_menu.addAction(next_subtab_act)
+        navigation_menu.addSeparator()
+
+        layer_menu = navigation_menu.addMenu(tr("MenuNavigation", "Switch layer"))
+        layer_actions = []
+        for digit in range(1, 10):
+            layer_idx = digit - 1
+            act = QAction(tr("MenuNavigation", "Layer {}".format(layer_idx)), self)
+            act.setShortcut(QKeySequence("Alt+{}".format(digit)))
+            act.setShortcutContext(Qt.ApplicationShortcut)
+            act.triggered.connect(lambda checked, idx=layer_idx: self.keymap_editor._switch_layer_shortcut(idx))
+            layer_menu.addAction(act)
+            layer_actions.append(act)
+        self.keymap_editor.set_layer_actions(layer_actions)
+        current_tab = self.tabs.currentWidget()
+        if current_tab is not None and getattr(current_tab, "editor", None) is self.keymap_editor:
+            self.keymap_editor.activate()
+
+        navigation_menu.addSeparator()
+        navigation_menu.addAction(zoom_in_act)
+        navigation_menu.addAction(zoom_out_act)
 
         self.security_menu = self.menuBar().addMenu(tr("Menu", "Security"))
         self.security_menu.addAction(keyboard_unlock_act)
@@ -493,29 +536,6 @@ class MainWindow(QMainWindow):
             new_tab.editor.activate()
 
         self.current_tab = new_tab
-
-    def _init_tab_shortcuts(self):
-        self.tab_shortcuts = []
-
-        next_shortcut = QShortcut(QKeySequence("Ctrl+PgDown"), self)
-        next_shortcut.setContext(Qt.WindowShortcut)
-        next_shortcut.activated.connect(lambda: self._step_tab(1))
-        self.tab_shortcuts.append(next_shortcut)
-
-        prev_shortcut = QShortcut(QKeySequence("Ctrl+PgUp"), self)
-        prev_shortcut.setContext(Qt.WindowShortcut)
-        prev_shortcut.activated.connect(lambda: self._step_tab(-1))
-        self.tab_shortcuts.append(prev_shortcut)
-
-        sub_next_shortcut = QShortcut(QKeySequence("Alt+PgDown"), self)
-        sub_next_shortcut.setContext(Qt.WindowShortcut)
-        sub_next_shortcut.activated.connect(lambda: self._step_subtab(1))
-        self.tab_shortcuts.append(sub_next_shortcut)
-
-        sub_prev_shortcut = QShortcut(QKeySequence("Alt+PgUp"), self)
-        sub_prev_shortcut.setContext(Qt.WindowShortcut)
-        sub_prev_shortcut.activated.connect(lambda: self._step_subtab(-1))
-        self.tab_shortcuts.append(sub_prev_shortcut)
 
     def _step_tab(self, delta):
         count = self.tabs.count()
