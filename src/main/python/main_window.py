@@ -4,8 +4,9 @@ import platform
 from json import JSONDecodeError
 
 from PyQt5.QtCore import Qt, QSettings, QStandardPaths, QTimer, QRect, QT_VERSION_STR
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QWidget, QComboBox, QToolButton, QHBoxLayout, QVBoxLayout, QMainWindow, QAction, qApp, \
-    QFileDialog, QDialog, QTabWidget, QActionGroup, QMessageBox, QLabel
+    QFileDialog, QDialog, QTabWidget, QActionGroup, QMessageBox, QLabel, QShortcut
 
 import os
 import sys
@@ -99,6 +100,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         self.refresh_tabs()
+        self._init_tab_shortcuts()
 
         no_devices = 'No devices detected. Connect a Vial-compatible device and press "Refresh"<br>' \
                      'or select "File" → "Download VIA definitions" in order to enable support for VIA keyboards.'
@@ -436,6 +438,67 @@ class MainWindow(QMainWindow):
             new_tab.editor.activate()
 
         self.current_tab = new_tab
+
+    def _init_tab_shortcuts(self):
+        self.tab_shortcuts = []
+
+        next_shortcut = QShortcut(QKeySequence("Ctrl+PgDown"), self)
+        next_shortcut.setContext(Qt.WindowShortcut)
+        next_shortcut.activated.connect(lambda: self._step_tab(1))
+        self.tab_shortcuts.append(next_shortcut)
+
+        prev_shortcut = QShortcut(QKeySequence("Ctrl+PgUp"), self)
+        prev_shortcut.setContext(Qt.WindowShortcut)
+        prev_shortcut.activated.connect(lambda: self._step_tab(-1))
+        self.tab_shortcuts.append(prev_shortcut)
+
+        sub_next_shortcut = QShortcut(QKeySequence("Alt+PgDown"), self)
+        sub_next_shortcut.setContext(Qt.WindowShortcut)
+        sub_next_shortcut.activated.connect(lambda: self._step_subtab(1))
+        self.tab_shortcuts.append(sub_next_shortcut)
+
+        sub_prev_shortcut = QShortcut(QKeySequence("Alt+PgUp"), self)
+        sub_prev_shortcut.setContext(Qt.WindowShortcut)
+        sub_prev_shortcut.activated.connect(lambda: self._step_subtab(-1))
+        self.tab_shortcuts.append(sub_prev_shortcut)
+
+    def _step_tab(self, delta):
+        count = self.tabs.count()
+        if count <= 1:
+            return
+        idx = self.tabs.currentIndex()
+        if idx < 0:
+            return
+        self.tabs.setCurrentIndex((idx + delta) % count)
+
+    def _step_subtab(self, delta):
+        tab_widget = self._find_active_subtab_widget()
+        if tab_widget is None:
+            return
+        count = tab_widget.count()
+        if count <= 1:
+            return
+        idx = tab_widget.currentIndex()
+        if idx < 0:
+            return
+        tab_widget.setCurrentIndex((idx + delta) % count)
+
+    def _find_active_subtab_widget(self):
+        focus_widget = qApp.focusWidget()
+        while focus_widget is not None:
+            if isinstance(focus_widget, QTabWidget) and focus_widget is not self.tabs \
+                    and focus_widget.isVisible():
+                return focus_widget
+            focus_widget = focus_widget.parentWidget()
+
+        if self.current_tab is None:
+            return None
+        for tab_widget in self.current_tab.findChildren(QTabWidget):
+            if tab_widget is self.tabs:
+                continue
+            if tab_widget.isVisible():
+                return tab_widget
+        return None
 
     def about_vial(self):
         title = "About Vial"
