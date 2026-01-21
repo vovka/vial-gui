@@ -919,8 +919,9 @@ def recreate_keyboard_keycodes(keyboard):
 
     KEYCODES_MACRO.clear()
     for x in range(keyboard.macro_count):
-        lbl = "M{}".format(x)
-        KEYCODES_MACRO.append(Keycode(lbl, lbl))
+        qmk_id = "M{}".format(x)
+        label = "M({})".format(x)
+        KEYCODES_MACRO.append(Keycode(qmk_id, label))
 
     for x, kc in enumerate(KEYCODES_MACRO_BASE):
         KEYCODES_MACRO.append(kc)
@@ -1004,13 +1005,13 @@ def get_macro_key_preview(actions, max_len=36):
 def format_macro_label(idx, preview, chars_per_line=8):
     """
     Format macro label with text preview split across up to 3 lines.
-    Format: M0\ntext or M0\nlong\ntext
+    Format: M(0)\ntext or M(0)\nlong\ntext
     """
     if not preview:
-        return 'M{}'.format(idx)
+        return 'M({})'.format(idx)
 
-    # First line is just M0, text starts on second line
-    lines = ['M{}'.format(idx)]
+    # First line is just M(0), text starts on second line
+    lines = ['M({})'.format(idx)]
     remaining = preview
 
     # Second line
