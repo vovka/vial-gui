@@ -282,6 +282,7 @@ class KeyOverride(BasicEditor):
             self.tabs.addTab(e.widget(), str(x + 1))
         for x, e in enumerate(self.key_override_entries):
             e.load(self.keyboard.key_override_get(x))
+        self.update_tab_labels()
 
     def rebuild(self, device):
         super().rebuild(device)
@@ -297,3 +298,16 @@ class KeyOverride(BasicEditor):
     def on_change(self):
         for x, e in enumerate(self.key_override_entries):
             self.keyboard.key_override_set(x, self.key_override_entries[x].save())
+        self.update_tab_labels()
+
+    def update_tab_labels(self):
+        for x, e in enumerate(self.key_override_entries):
+            is_free = self.is_entry_free(e.save())
+            self.tabs.set_tab_label(x, str(x + 1), is_free)
+
+    def is_entry_free(self, entry):
+        if entry.options.enabled:
+            return False
+        if entry.trigger != "KC_NO" or entry.replacement != "KC_NO":
+            return False
+        return True

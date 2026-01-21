@@ -199,6 +199,7 @@ class AltRepeatKey(BasicEditor):
             self.tabs.addTab(e.widget(), str(x + 1))
         for x, e in enumerate(self.alt_repeat_key_entries):
             e.load(self.keyboard.alt_repeat_key_get(x))
+        self.update_tab_labels()
 
     def rebuild(self, device):
         super().rebuild(device)
@@ -214,3 +215,16 @@ class AltRepeatKey(BasicEditor):
     def on_change(self):
         for x, e in enumerate(self.alt_repeat_key_entries):
             self.keyboard.alt_repeat_key_set(x, self.alt_repeat_key_entries[x].save())
+        self.update_tab_labels()
+
+    def update_tab_labels(self):
+        for x, e in enumerate(self.alt_repeat_key_entries):
+            is_free = self.is_entry_free(e.save())
+            self.tabs.set_tab_label(x, str(x + 1), is_free)
+
+    def is_entry_free(self, entry):
+        if entry.options.serialize() != 0:
+            return False
+        if entry.keycode != "KC_NO" or entry.alt_keycode != "KC_NO":
+            return False
+        return entry.allowed_mods == 0

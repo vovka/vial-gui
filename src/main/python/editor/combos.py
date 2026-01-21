@@ -96,6 +96,7 @@ class Combos(BasicEditor):
             self.tabs.addTab(e.widget(), str(x + 1))
         for x, e in enumerate(self.combo_entries):
             e.load(self.keyboard.combo_get(x))
+        self.update_tab_labels()
 
     def rebuild(self, device):
         super().rebuild(device)
@@ -111,3 +112,12 @@ class Combos(BasicEditor):
     def on_key_changed(self):
         for x, e in enumerate(self.combo_entries):
             self.keyboard.combo_set(x, self.combo_entries[x].save())
+        self.update_tab_labels()
+
+    def update_tab_labels(self):
+        for x, e in enumerate(self.combo_entries):
+            is_free = self.is_entry_free(e.save())
+            self.tabs.set_tab_label(x, str(x + 1), is_free)
+
+    def is_entry_free(self, entry):
+        return all(keycode == "KC_NO" for keycode in entry)

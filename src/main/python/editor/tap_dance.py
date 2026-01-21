@@ -169,12 +169,17 @@ class TapDance(BasicEditor):
         """ Update indication of which tabs are modified, and keep Save button enabled only if it's needed """
         has_changes = False
         for x, e in enumerate(self.tap_dance_entries):
-            if self.tap_dance_entries[x].save() != self.keyboard.tap_dance_get(x):
+            current = self.tap_dance_entries[x].save()
+            is_free = self.is_entry_free(current)
+            if current != self.keyboard.tap_dance_get(x):
                 has_changes = True
-                self.tabs.setTabText(x, "{}*".format(x))
+                self.tabs.set_tab_label(x, "{}*".format(x), is_free)
             else:
-                self.tabs.setTabText(x, str(x))
+                self.tabs.set_tab_label(x, str(x), is_free)
         self.btn_save.setEnabled(has_changes)
+
+    def is_entry_free(self, entry):
+        return all(keycode == "KC_NO" for keycode in entry[:4])
 
     def on_timing_changed(self):
         self.update_modified_state()

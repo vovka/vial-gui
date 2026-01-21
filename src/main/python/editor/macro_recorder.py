@@ -100,7 +100,8 @@ class MacroRecorder(BasicEditor):
             title = "M{}".format(x)
             if macros[x] != self.keyboard.macro_serialize(self.macro_tabs[x].actions()):
                 title += "*"
-            self.tabs.setTabText(x, title)
+            is_free = len(self.macro_tabs[x].actions()) == 0
+            self.tabs.set_tab_label(x, title, is_free)
 
     def on_record(self, tab, append):
         self.recording_tab = tab
