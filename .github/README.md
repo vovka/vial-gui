@@ -6,18 +6,57 @@ See [README.md](/README.md) for the upstream overview, release links, and develo
 
 ## What This Fork Changes
 
-This fork focuses on making tap dance and macro behavior visible directly in the GUI so key assignments are easier to understand at a glance.
+This fork focuses on making dynamic behavior visible directly in the GUI and improving navigation so key assignments are easier to understand at a glance.
 
-- Tap dance: key labels preview dot/underscore actions; header/action lines align for readability; labels refresh after edits; font sizing stays compact without shrinking the grid.
-- Macros: labels preview text content and key actions; refresh after saving; smaller fonts for multi-line previews without changing button sizing.
-- Keymap rendering: combo overlays for chorded inputs; masked key labels expand to show inner keycodes.
+- Overall UI clarity: original -> enhanced layout with dynamic previews and overlays.
 
-## Screenshots
+  <div align="center">
+    <img src="/docs/images/original-ui.png" alt="Original Vial GUI screenshot" />
+    <br />
+    &darr;
+    <br />
+    <img src="/docs/images/fork-ui.png" alt="Enhanced fork UI screenshot" />
+  </div>
+- Macro key labels: M(n) labels with inline previews of text or key actions (including down/up), so you can identify macros without opening the editor; previews refresh after edits.
 
-Original Vial GUI:
+  <div align="center">
+    <img src="/docs/images/macro-keys-before.png" alt="Macro key labels before" />
+    <br />
+    &darr;
+    <br />
+    <img src="/docs/images/macro-keys-after.png" alt="Macro key labels after" />
+  </div>
+- Macro text preview: compact multi-line text previews inside key labels.
 
-![Original Vial GUI screenshot](/docs/images/original-ui.png)
+  <div align="center">
+    <img src="/docs/images/macro-text-before.png" alt="Macro text preview before" />
+    <br />
+    &darr;
+    <br />
+    <img src="/docs/images/macro-text-after.png" alt="Macro text preview after" />
+  </div>
+- Tap dance previews: dot/underscore action lines in a consistent order, aligned layout, and font scaling that keeps the key grid stable.
 
-Enhanced fork UI:
+  <div align="center">
+    <img src="/docs/images/tap-dance-before.png" alt="Tap dance preview before" />
+    <br />
+    &darr;
+    <br />
+    <img src="/docs/images/tap-dance-after.png" alt="Tap dance preview after" />
+  </div>
+- Combo overlays: keymap shows combo overlays with labels/output previews; View > Combos toggle (Ctrl+C) remembers your choice; masked keycodes expand to show their inner key.
 
-![Enhanced fork UI screenshot](/docs/images/fork-ui.png)
+  <div align="center">
+    <img src="/docs/images/combos-after.png" alt="Combos overlay preview" />
+  </div>
+
+- Free slots: unused entries are italicized in dynamic tabs (macros, tap dance, combos, key overrides, alt-repeat).
+
+  <div align="center">
+    <img src="/docs/images/free-slots-tabs.png" alt="Free slots in tabs" />
+  </div>
+- Navigation and zoom: Ctrl+PgUp/PgDn for tabs, Alt+PgUp/PgDn for subtabs, Alt+1..9 for layers via a Navigation menu; UI zoom and keymap zoom persist across restarts.
+
+  <div align="center">
+    <img src="/docs/images/navigation-menu.png" alt="Navigation menu shortcuts" />
+  </div>
