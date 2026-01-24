@@ -2,7 +2,7 @@
 import json
 
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QMessageBox, QWidget
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSettings
 
 from any_keycode_dialog import AnyKeycodeDialog
 from editor.basic_editor import BasicEditor
@@ -28,6 +28,7 @@ class KeymapEditor(BasicEditor):
     def __init__(self, layout_editor):
         super().__init__()
 
+        self.settings = QSettings("Vial", "Vial")
         self.layout_editor = layout_editor
 
         self.layout_layers = QHBoxLayout()
@@ -42,6 +43,7 @@ class KeymapEditor(BasicEditor):
 
         # contains the actual keyboard
         self.container = KeyboardWidget(layout_editor)
+        self._apply_keymap_zoom(self._load_keymap_zoom(), persist=False)
         self.container.clicked.connect(self.on_key_clicked)
         self.container.deselected.connect(self.on_key_deselected)
 
@@ -71,6 +73,22 @@ class KeymapEditor(BasicEditor):
 
         self.device = None
         KeycodeDisplay.notify_keymap_override(self)
+
+    def _load_keymap_zoom(self):
+        value = self.settings.value("keymap_zoom", None)
+        if value is None:
+            return 1.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 1.0
+
+    def _apply_keymap_zoom(self, zoom, persist=True):
+        zoom = max(0.1, float(zoom))
+        zoom = round(zoom, 2)
+        self.container.set_scale(zoom)
+        if persist:
+            self.settings.setValue("keymap_zoom", zoom)
 
     def activate(self):
         for action in self.layer_actions:
@@ -117,10 +135,8 @@ class KeymapEditor(BasicEditor):
             self.layer_buttons.append(btn)
 
     def adjust_size(self, minus):
-        if minus:
-            self.container.set_scale(self.container.get_scale() - 0.1)
-        else:
-            self.container.set_scale(self.container.get_scale() + 0.1)
+        delta = -0.1 if minus else 0.1
+        self._apply_keymap_zoom(self.container.get_scale() + delta)
         self.refresh_layer_display()
 
     def rebuild(self, device):
