@@ -288,6 +288,7 @@ class KeyboardWidget(QWidget):
         self.combo_entries = []
         self.combo_entries_numeric = []
         self.combo_widget_keycodes_numeric = {}
+        self.show_combos = True
 
     def set_keys(self, keys, encoders):
         self.common_widgets = []
@@ -391,6 +392,12 @@ class KeyboardWidget(QWidget):
         if widget_keycodes:
             for widget, code in widget_keycodes.items():
                 self.combo_widget_keycodes_numeric[widget] = Keycode.deserialize(code)
+
+    def set_show_combos(self, enabled):
+        enabled = bool(enabled)
+        if self.show_combos != enabled:
+            self.show_combos = enabled
+            self.update()
 
     def _collect_combo_widgets(self):
         if not self.combo_entries_numeric or not self.combo_widget_keycodes_numeric:
@@ -782,7 +789,8 @@ class KeyboardWidget(QWidget):
 
             qp.restore()
 
-        self._draw_combos(qp)
+        if self.show_combos:
+            self._draw_combos(qp)
 
         qp.end()
 

@@ -273,6 +273,16 @@ class MainWindow(QMainWindow):
         navigation_menu.addAction(zoom_in_act)
         navigation_menu.addAction(zoom_out_act)
 
+        view_menu = self.menuBar().addMenu(tr("Menu", "View"))
+        self.combos_preview_act = QAction(tr("MenuView", "Combos"), self)
+        self.combos_preview_act.setCheckable(True)
+        self.combos_preview_act.setShortcut(QKeySequence("Ctrl+C"))
+        self.combos_preview_act.setShortcutContext(Qt.WindowShortcut)
+        self.combos_preview_act.setChecked(self._load_combos_preview())
+        self.combos_preview_act.toggled.connect(self.set_combos_preview)
+        view_menu.addAction(self.combos_preview_act)
+        self.keymap_editor.set_combos_preview_enabled(self.combos_preview_act.isChecked())
+
         self.security_menu = self.menuBar().addMenu(tr("Menu", "Security"))
         self.security_menu.addAction(keyboard_unlock_act)
         self.security_menu.addAction(keyboard_lock_act)
@@ -492,6 +502,13 @@ class MainWindow(QMainWindow):
             return float(value)
         except (TypeError, ValueError):
             return 1.0
+
+    def _load_combos_preview(self):
+        return self.settings.value("view_combos", True, bool)
+
+    def set_combos_preview(self, enabled):
+        self.settings.setValue("view_combos", bool(enabled))
+        self.keymap_editor.set_combos_preview_enabled(enabled)
 
     def _apply_ui_zoom(self, zoom, persist=True):
         zoom = max(0.1, float(zoom))

@@ -90,6 +90,9 @@ class KeymapEditor(BasicEditor):
         if persist:
             self.settings.setValue("keymap_zoom", zoom)
 
+    def set_combos_preview_enabled(self, enabled):
+        self.container.set_show_combos(enabled)
+
     def activate(self):
         for action in self.layer_actions:
             action.setEnabled(True)
