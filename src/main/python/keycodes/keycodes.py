@@ -1002,6 +1002,60 @@ def get_macro_key_preview(actions, max_len=36):
     return preview
 
 
+def _split_macro_preview(preview, chars_per_line):
+    if len(preview) <= chars_per_line:
+        return [preview]
+
+    words = preview.split()
+    if len(words) <= 1:
+        first = preview[:chars_per_line]
+        remaining = preview[chars_per_line:]
+        if remaining:
+            if len(remaining) > chars_per_line:
+                remaining = remaining[:chars_per_line - 1] + '…'
+            return [first, remaining]
+        return [first]
+
+    best_split = None
+    best_score = None
+    for split_idx in range(len(words) - 1, 0, -1):
+        first = " ".join(words[:split_idx])
+        second = " ".join(words[split_idx:])
+        if len(first) <= chars_per_line and len(second) <= chars_per_line:
+            score = min(len(first), len(second))
+            if best_score is None or score > best_score or (
+                score == best_score and len(first) > len(best_split[0])
+            ):
+                best_score = score
+                best_split = (first, second)
+
+    if best_split:
+        return list(best_split)
+
+    line_words = []
+    for word in words:
+        candidate = " ".join(line_words + [word]) if line_words else word
+        if len(candidate) <= chars_per_line:
+            line_words.append(word)
+        else:
+            break
+
+    if not line_words:
+        long_word = words[0]
+        first = long_word[:chars_per_line]
+        remaining_words = [long_word[chars_per_line:]] + words[1:]
+        remaining = " ".join(filter(None, remaining_words))
+    else:
+        first = " ".join(line_words)
+        remaining = " ".join(words[len(line_words):])
+
+    if remaining:
+        if len(remaining) > chars_per_line:
+            remaining = remaining[:chars_per_line - 1] + '…'
+        return [first, remaining]
+    return [first]
+
+
 def format_macro_label(idx, preview, chars_per_line=8):
     """
     Format macro label with text preview split across up to 3 lines.
@@ -1010,24 +1064,8 @@ def format_macro_label(idx, preview, chars_per_line=8):
     if not preview:
         return 'M({})'.format(idx)
 
-    # First line is just M(0), text starts on second line
     lines = ['M({})'.format(idx)]
-    remaining = preview
-
-    # Second line
-    if len(remaining) <= chars_per_line:
-        lines.append(remaining)
-        return '\n'.join(lines)
-
-    lines.append(remaining[:chars_per_line])
-    remaining = remaining[chars_per_line:]
-
-    # Third line (if needed)
-    if remaining:
-        if len(remaining) > chars_per_line:
-            remaining = remaining[:chars_per_line - 1] + '…'
-        lines.append(remaining)
-
+    lines.extend(_split_macro_preview(preview, chars_per_line))
     return '\n'.join(lines)
 
 
@@ -1062,7 +1100,7 @@ def update_macro_labels(keyboard):
                 kc.font_scale = 0.7
             else:
                 # Keep the default label for non-text macros
-                kc.label = 'M{}'.format(idx)
+                kc.label = 'M({})'.format(idx)
                 kc.tooltip = 'Macro {}'.format(idx)
                 kc.font_scale = 1.0
 
