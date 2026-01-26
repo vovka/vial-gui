@@ -30,6 +30,8 @@ class ComboDrawingContext:
 
         self.line_pen = QPen(line_color)
         self.line_pen.setWidthF(1.0)
+        self.line_pen.setCapStyle(Qt.RoundCap)
+        self.line_pen.setJoinStyle(Qt.RoundJoin)
         self.border_pen = QPen(border_color)
         self.border_pen.setWidthF(1.5)
         self.fill_brush = QBrush(fill_color)
@@ -69,6 +71,7 @@ class ComboDrawingContext:
     def _draw_lines(self, combo, renderer):
         """Draw connecting lines from label to keys."""
         self.qp.setPen(self.line_pen)
+        self.qp.setBrush(Qt.NoBrush)
         start = self._get_dendron_start(combo)
         for widget in combo.widgets:
             key_center = widget.polygon.boundingRect().center()
