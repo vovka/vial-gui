@@ -1002,6 +1002,48 @@ def get_macro_key_preview(actions, max_len=36):
     return preview
 
 
+def _split_macro_preview(preview, chars_per_line):
+    if len(preview) <= chars_per_line:
+        return [preview]
+
+    words = preview.split()
+    if len(words) <= 1:
+        first = preview[:chars_per_line]
+        remaining = preview[chars_per_line:]
+        if remaining:
+            if len(remaining) > chars_per_line:
+                remaining = remaining[:chars_per_line - 1] + '…'
+            return [first, remaining]
+        return [first]
+
+    for split_idx in range(1, len(words)):
+        first = " ".join(words[:split_idx])
+        second = " ".join(words[split_idx:])
+        if len(first) <= chars_per_line and len(second) <= chars_per_line:
+            return [first, second]
+
+    line_words = []
+    for word in words:
+        candidate = " ".join(line_words + [word]) if line_words else word
+        if len(candidate) <= chars_per_line:
+            line_words.append(word)
+        else:
+            break
+
+    if not line_words:
+        first = preview[:chars_per_line]
+        remaining = preview[chars_per_line:]
+    else:
+        first = " ".join(line_words)
+        remaining = " ".join(words[len(line_words):])
+
+    if remaining:
+        if len(remaining) > chars_per_line:
+            remaining = remaining[:chars_per_line - 1] + '…'
+        return [first, remaining]
+    return [first]
+
+
 def format_macro_label(idx, preview, chars_per_line=8):
     """
     Format macro label with text preview split across up to 3 lines.
@@ -1010,24 +1052,8 @@ def format_macro_label(idx, preview, chars_per_line=8):
     if not preview:
         return 'M({})'.format(idx)
 
-    # First line is just M(0), text starts on second line
     lines = ['M({})'.format(idx)]
-    remaining = preview
-
-    # Second line
-    if len(remaining) <= chars_per_line:
-        lines.append(remaining)
-        return '\n'.join(lines)
-
-    lines.append(remaining[:chars_per_line])
-    remaining = remaining[chars_per_line:]
-
-    # Third line (if needed)
-    if remaining:
-        if len(remaining) > chars_per_line:
-            remaining = remaining[:chars_per_line - 1] + '…'
-        lines.append(remaining)
-
+    lines.extend(_split_macro_preview(preview, chars_per_line))
     return '\n'.join(lines)
 
 
