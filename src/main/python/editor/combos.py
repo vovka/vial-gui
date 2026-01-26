@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QWidget, QSizePolicy, QGridLayout, QVBoxLayout, QLab
 
 from protocol.constants import VIAL_PROTOCOL_DYNAMIC
 from keycodes.keycodes import find_unusable_combos
+from util import KeycodeDisplay
 from widgets.key_widget import KeyWidget
 from vial_device import VialKeyboard
 from editor.basic_editor import BasicEditor
@@ -154,8 +155,9 @@ class Combos(BasicEditor):
             self.combo_entries[i].load(data)
             self.keyboard.combo_set(i, data)
 
-        # Update tab labels
+        # Update tab labels and refresh keymap display
         self.update_tab_labels()
+        KeycodeDisplay.refresh_clients()
 
         # Switch to the moved tab's new position
         self.tabs.setCurrentIndex(to_index)

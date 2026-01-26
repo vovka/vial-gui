@@ -11,7 +11,7 @@ from macro.macro_key import KeyString, KeyDown, KeyUp, KeyTap
 from macro.macro_optimizer import macro_optimize
 from macro.macro_tab import MacroTab
 from unlocker import Unlocker
-from util import tr
+from util import tr, KeycodeDisplay
 from vial_device import VialKeyboard
 from widgets.tab_widget_keycodes import TabWidgetWithKeycodes
 
@@ -218,8 +218,9 @@ class MacroRecorder(BasicEditor):
                 tab.add_action(ui_action[type(act)](tab.container, act))
         self.suppress_change = False
 
-        # Update display
+        # Update display and refresh keymap
         self.on_change()
+        KeycodeDisplay.refresh_clients()
 
         # Switch to the moved tab's new position
         self.tabs.setCurrentIndex(to_index)
