@@ -4,6 +4,15 @@ from PyQt5.QtCore import QRectF
 
 from widgets.combo_visualization.geometry import ComboGeometry
 
+SCORE_KEY_OVERLAP = 1000
+SCORE_LABEL_OVERLAP = 500
+SCORE_EDGE_PROXIMITY = 50
+SCORE_LINE_CROSSES_KEY = 30
+SCORE_LINE_INTERSECTION = 20
+SCORE_SPLIT_GAP_BONUS = -10
+EDGE_MARGIN = 5
+MAX_FALLBACK_ATTEMPTS = 8
+
 
 class ComboLabelPlacer:
     """Handles smart placement of combo labels."""
@@ -29,7 +38,7 @@ class ComboLabelPlacer:
                 best_score = score
                 best_rect = clamped
 
-        if best_rect is None or best_score >= 1000:
+        if best_rect is None or best_score >= SCORE_KEY_OVERLAP:
             best_rect = self._find_fallback_position(combo_info)
 
         self._record_placement(best_rect, combo_info['key_centers'])
@@ -104,17 +113,17 @@ class ComboLabelPlacer:
         return score
 
     def _score_key_overlaps(self, rect):
-        return sum(1000 for r in self.key_rects if rect.intersects(r))
+        return sum(SCORE_KEY_OVERLAP for r in self.key_rects if rect.intersects(r))
 
     def _score_label_overlaps(self, rect):
-        return sum(500 for r in self.placed_rects if rect.intersects(r))
+        return sum(SCORE_LABEL_OVERLAP for r in self.placed_rects if rect.intersects(r))
 
     def _score_edge_proximity(self, rect):
-        score, margin = 0, 5
-        if rect.left() < margin or rect.right() > self.canvas_width - margin:
-            score += 50
-        if rect.top() < margin or rect.bottom() > self.canvas_height - margin:
-            score += 50
+        score = 0
+        if rect.left() < EDGE_MARGIN or rect.right() > self.canvas_width - EDGE_MARGIN:
+            score += SCORE_EDGE_PROXIMITY
+        if rect.top() < EDGE_MARGIN or rect.bottom() > self.canvas_height - EDGE_MARGIN:
+            score += SCORE_EDGE_PROXIMITY
         return score
 
     def _score_line_crossings(self, rect, combo_info):
@@ -125,7 +134,7 @@ class ComboLabelPlacer:
                 if key_rect in combo_key_rects:
                     continue
                 if ComboGeometry.line_crosses_rect(rect_center, key_center, key_rect):
-                    score += 30
+                    score += SCORE_LINE_CROSSES_KEY
         return score
 
     def _score_combo_line_intersections(self, rect, combo_info):
@@ -134,12 +143,12 @@ class ComboLabelPlacer:
             for key_center in combo_info['key_centers']:
                 for prev_key in prev_keys:
                     if ComboGeometry.segments_intersect(rect_center, key_center, prev_center, prev_key):
-                        score += 20
+                        score += SCORE_LINE_INTERSECTION
         return score
 
     def _score_split_gap_bonus(self, rect):
         if self.split_gap and self.split_gap[0] < rect.center().x() < self.split_gap[1]:
-            return -10
+            return SCORE_SPLIT_GAP_BONUS
         return 0
 
     def _clamp_rect(self, rect, rect_w, rect_h):
@@ -157,8 +166,8 @@ class ComboLabelPlacer:
             rect_w, rect_h
         )
         step_y = rect_h + gap
-        for _ in range(8):
-            if self._score_position(rect, combo_info) < 500:
+        for _ in range(MAX_FALLBACK_ATTEMPTS):
+            if self._score_position(rect, combo_info) < SCORE_LABEL_OVERLAP:
                 break
             rect = self._clamp_rect(QRectF(rect.x(), rect.y() + step_y, rect_w, rect_h), rect_w, rect_h)
         return rect
