@@ -48,6 +48,7 @@ class MacroRecorder(BasicEditor):
         self.recording_append = False
 
         self.tabs = TabWidgetWithKeycodes()
+        self.tabs.tabs_reordered.connect(self.on_tabs_reordered)
 
         self.lbl_memory = QLabel()
 
@@ -185,3 +186,40 @@ class MacroRecorder(BasicEditor):
         self.keyboard.set_macro(self.serialize())
         update_macro_labels(self.keyboard)
         self.on_change()
+
+    def on_tabs_reordered(self, from_index, to_index, is_swap):
+        """Handle tab reordering via drag-and-drop.
+
+        Args:
+            from_index: Source tab index
+            to_index: Target tab index
+            is_swap: If True, swap the two tabs. If False, insert and shift others.
+        """
+        if from_index == to_index:
+            return
+
+        # Save current actions from all tabs
+        all_actions = [self.macro_tabs[i].actions()[:] for i in range(self.keyboard.macro_count)]
+
+        if is_swap:
+            # Swap mode: exchange positions of from_index and to_index
+            all_actions[from_index], all_actions[to_index] = all_actions[to_index], all_actions[from_index]
+        else:
+            # Insert mode: remove from source and insert at target
+            actions = all_actions.pop(from_index)
+            all_actions.insert(to_index, actions)
+
+        # Reload all tabs with new data
+        self.suppress_change = True
+        for i, actions in enumerate(all_actions):
+            tab = self.macro_tabs[i]
+            tab.clear()
+            for act in actions:
+                tab.add_action(ui_action[type(act)](tab.container, act))
+        self.suppress_change = False
+
+        # Update display
+        self.on_change()
+
+        # Switch to the moved tab's new position
+        self.tabs.setCurrentIndex(to_index)
