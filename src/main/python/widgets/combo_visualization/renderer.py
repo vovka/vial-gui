@@ -43,9 +43,14 @@ class ComboRenderer:
             combo.centers, self.all_key_centers,
             self.canvas_width, self.canvas_height
         )
-        gap = combo.avg_size * 0.25
-        rect_w = max(combo.avg_size * 0.5, combo.avg_size * 0.45)
-        rect_h = max(combo.avg_size * 0.4, combo.avg_size * 0.35)
+        if combo.adjacent:
+            gap = combo.avg_size * 0.12
+            rect_w = combo.avg_size * 0.38
+            rect_h = combo.avg_size * 0.3
+        else:
+            gap = combo.avg_size * 0.25
+            rect_w = max(combo.avg_size * 0.5, combo.avg_size * 0.45)
+            rect_h = max(combo.avg_size * 0.4, combo.avg_size * 0.35)
 
         return {
             'bbox': combo.bbox,

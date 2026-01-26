@@ -5,11 +5,12 @@ from PyQt5.QtCore import QRectF
 from widgets.combo_visualization.geometry import ComboGeometry
 
 SCORE_KEY_OVERLAP = 1000
-SCORE_LABEL_OVERLAP = 500
+SCORE_LABEL_OVERLAP = 1500
 SCORE_EDGE_PROXIMITY = 50
-SCORE_LINE_CROSSES_KEY = 30
-SCORE_LINE_INTERSECTION = 20
-SCORE_SPLIT_GAP_BONUS = -10
+SCORE_LINE_CROSSES_KEY = 60
+SCORE_LINE_INTERSECTION = 140
+SCORE_SPLIT_GAP_PENALTY = 120
+SCORE_ADJACENT_CENTER_WEIGHT = 2.0
 EDGE_MARGIN = 5
 MAX_FALLBACK_ATTEMPTS = 8
 
@@ -109,7 +110,8 @@ class ComboLabelPlacer:
         score += self._score_edge_proximity(rect)
         score += self._score_line_crossings(rect, combo_info)
         score += self._score_combo_line_intersections(rect, combo_info)
-        score += self._score_split_gap_bonus(rect)
+        score += self._score_split_gap_penalty(rect)
+        score += self._score_adjacent_center(rect, combo_info)
         return score
 
     def _score_key_overlaps(self, rect):
@@ -146,10 +148,18 @@ class ComboLabelPlacer:
                         score += SCORE_LINE_INTERSECTION
         return score
 
-    def _score_split_gap_bonus(self, rect):
+    def _score_split_gap_penalty(self, rect):
         if self.split_gap and self.split_gap[0] < rect.center().x() < self.split_gap[1]:
-            return SCORE_SPLIT_GAP_BONUS
+            return SCORE_SPLIT_GAP_PENALTY
         return 0
+
+    def _score_adjacent_center(self, rect, combo_info):
+        if not combo_info.get('adjacent'):
+            return 0
+        center = combo_info['center']
+        delta = rect.center() - center
+        distance = (delta.x() ** 2 + delta.y() ** 2) ** 0.5
+        return distance * SCORE_ADJACENT_CENTER_WEIGHT
 
     def _clamp_rect(self, rect, rect_w, rect_h):
         """Clamp rectangle to canvas bounds."""

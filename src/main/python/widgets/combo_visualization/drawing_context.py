@@ -77,8 +77,8 @@ class ComboDrawingContext:
         for widget in combo.widgets:
             key_rect = widget.polygon.boundingRect()
             start = self._offset_dendron_start(combo, key_rect, base_start)
-            key_edge = ComboGeometry.ray_rect_edge_intersection(start, key_rect)
-            path = renderer.create_line_path(combo, start, key_edge)
+            key_anchor = ComboGeometry.closest_rect_corner(start, key_rect)
+            path = renderer.create_line_path(combo, start, key_anchor)
             self.qp.drawPath(path)
 
     def _get_dendron_start(self, combo):

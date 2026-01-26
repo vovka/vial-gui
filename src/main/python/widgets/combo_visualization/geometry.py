@@ -77,3 +77,16 @@ class ComboGeometry:
             (QPointF(rect.right(), rect.bottom()), QPointF(rect.left(), rect.bottom())),
             (QPointF(rect.left(), rect.bottom()), QPointF(rect.left(), rect.top())),
         ]
+
+    @staticmethod
+    def closest_rect_corner(point, rect, inset_ratio=0.08):
+        """Return the closest rectangle corner to the point, inset slightly."""
+        inset_x = rect.width() * inset_ratio
+        inset_y = rect.height() * inset_ratio
+        corners = [
+            QPointF(rect.left() + inset_x, rect.top() + inset_y),
+            QPointF(rect.right() - inset_x, rect.top() + inset_y),
+            QPointF(rect.right() - inset_x, rect.bottom() - inset_y),
+            QPointF(rect.left() + inset_x, rect.bottom() - inset_y),
+        ]
+        return min(corners, key=lambda c: (c.x() - point.x()) ** 2 + (c.y() - point.y()) ** 2)
