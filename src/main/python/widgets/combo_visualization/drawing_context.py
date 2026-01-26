@@ -1,8 +1,8 @@
 """Drawing context for combo visualization."""
 
 from PyQt5.QtCore import QRectF, Qt
-from PyQt5.QtGui import QColor, QPen, QBrush, QFontMetrics, QPainter
-from PyQt5.QtWidgets import QApplication, QPalette
+from PyQt5.QtGui import QColor, QPen, QBrush, QFontMetrics, QPainter, QPalette
+from PyQt5.QtWidgets import QApplication
 
 from constants import KEY_ROUNDNESS
 
