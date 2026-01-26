@@ -192,10 +192,58 @@ class TapDance(BasicEditor):
         """Handle tab reordering via drag-and-drop."""
         if from_index == to_index:
             return
+        self._swap_keymap_references(from_index, to_index, is_swap)
         all_data = self._collect_all_data()
         all_data = self._reorder_data(all_data, from_index, to_index, is_swap)
         self._apply_reordered_data(all_data)
         self.tabs.setCurrentIndex(to_index)
+
+    def _swap_keymap_references(self, from_idx, to_idx, is_swap):
+        """Update keymap to swap tap dance references."""
+        mapping = self._build_index_mapping(from_idx, to_idx, is_swap)
+        self._update_layout_references(mapping)
+        self._update_encoder_references(mapping)
+
+    def _build_index_mapping(self, from_idx, to_idx, is_swap):
+        """Build a mapping of old index -> new index."""
+        if is_swap:
+            return {from_idx: to_idx, to_idx: from_idx}
+        mapping = {}
+        if from_idx < to_idx:
+            for i in range(from_idx, to_idx + 1):
+                mapping[i] = i - 1 if i > from_idx else to_idx
+        else:
+            for i in range(to_idx, from_idx + 1):
+                mapping[i] = i + 1 if i < from_idx else to_idx
+        return mapping
+
+    def _update_layout_references(self, mapping):
+        """Update keymap layout with new tap dance references."""
+        for key, keycode in list(self.keyboard.layout.items()):
+            new_code = self._remap_keycode(keycode, mapping)
+            if new_code != keycode:
+                layer, row, col = key
+                self.keyboard.set_key(layer, row, col, new_code)
+
+    def _update_encoder_references(self, mapping):
+        """Update encoder layout with new tap dance references."""
+        for key, keycode in list(self.keyboard.encoder_layout.items()):
+            new_code = self._remap_keycode(keycode, mapping)
+            if new_code != keycode:
+                layer, idx, direction = key
+                self.keyboard.set_encoder(layer, idx, direction, new_code)
+
+    def _remap_keycode(self, keycode, mapping):
+        """Remap a tap dance keycode if it matches TD(N) pattern."""
+        if not keycode.startswith("TD(") or not keycode.endswith(")"):
+            return keycode
+        try:
+            idx = int(keycode[3:-1])
+            if idx in mapping:
+                return "TD({})".format(mapping[idx])
+        except ValueError:
+            pass
+        return keycode
 
     def _collect_all_data(self):
         return [self.tap_dance_entries[i].save() for i in range(len(self.tap_dance_entries))]
