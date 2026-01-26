@@ -158,7 +158,4 @@ class Combos(BasicEditor):
         self.update_tab_labels()
 
         # Switch to the moved tab's new position
-        if is_swap:
-            self.tabs.setCurrentIndex(to_index)
-        else:
-            self.tabs.setCurrentIndex(to_index)
+        self.tabs.setCurrentIndex(to_index)
