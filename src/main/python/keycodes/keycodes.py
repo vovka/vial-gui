@@ -1152,14 +1152,19 @@ def collect_keycodes_in_tap_dances(keyboard):
     """
     used = set()
     entries = getattr(keyboard, "tap_dance_entries", [])
+
+    def add_keycode(kc):
+        if not kc or kc == "KC_NO":
+            return
+        used.add(kc)
+        if Keycode.is_mask(kc):
+            inner = Keycode.find_inner_keycode(kc)
+            if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                add_keycode(inner.qmk_id)
+
     for entry in entries:
         for kc in entry[:4]:  # First 4 elements are keycodes
-            if kc and kc != "KC_NO":
-                used.add(kc)
-                if Keycode.is_mask(kc):
-                    inner = Keycode.find_inner_keycode(kc)
-                    if inner and inner.qmk_id not in ("KC_NO", "kc"):
-                        used.add(inner.qmk_id)
+            add_keycode(kc)
     return used
 
 
@@ -1171,16 +1176,21 @@ def collect_keycodes_in_combos(keyboard):
     """
     used = set()
     entries = getattr(keyboard, "combo_entries", [])
+
+    def add_keycode(kc):
+        if not kc or kc == "KC_NO":
+            return
+        used.add(kc)
+        if Keycode.is_mask(kc):
+            inner = Keycode.find_inner_keycode(kc)
+            if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                add_keycode(inner.qmk_id)
+
     for entry in entries:
         # Entry is (key1, key2, key3, key4, output)
         # The output key could reference TD or M
         output = entry[4] if len(entry) > 4 else None
-        if output and output != "KC_NO":
-            used.add(output)
-            if Keycode.is_mask(output):
-                inner = Keycode.find_inner_keycode(output)
-                if inner and inner.qmk_id not in ("KC_NO", "kc"):
-                    used.add(inner.qmk_id)
+        add_keycode(output)
     return used
 
 
