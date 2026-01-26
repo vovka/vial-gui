@@ -73,9 +73,10 @@ class ComboDrawingContext:
         """Draw connecting lines from label to keys."""
         self.qp.setPen(self.line_pen)
         self.qp.setBrush(Qt.NoBrush)
-        start = self._get_dendron_start(combo)
+        base_start = self._get_dendron_start(combo)
         for widget in combo.widgets:
             key_rect = widget.polygon.boundingRect()
+            start = self._offset_dendron_start(combo, key_rect, base_start)
             key_edge = ComboGeometry.ray_rect_edge_intersection(start, key_rect)
             path = renderer.create_line_path(combo, start, key_edge)
             self.qp.drawPath(path)
@@ -92,6 +93,22 @@ class ComboDrawingContext:
         elif combo.alignment == 'right':
             return QPointF(rect.left(), rect.center().y())
         return rect.center()
+
+    def _offset_dendron_start(self, combo, key_rect, base_start):
+        """Offset the dendron start along the label edge for smoother fan-out."""
+        rect = combo.rect
+        key_center = key_rect.center()
+        if combo.alignment in ('top', 'bottom'):
+            max_offset = rect.width() * 0.35
+            delta = key_center.x() - rect.center().x()
+            offset = max(-max_offset, min(delta, max_offset))
+            return QPointF(base_start.x() + offset, base_start.y())
+        if combo.alignment in ('left', 'right'):
+            max_offset = rect.height() * 0.35
+            delta = key_center.y() - rect.center().y()
+            offset = max(-max_offset, min(delta, max_offset))
+            return QPointF(base_start.x(), base_start.y() + offset)
+        return base_start
 
     def _draw_label_box(self, combo):
         """Draw the label background box."""
