@@ -142,6 +142,12 @@ class KeymapEditor(BasicEditor):
         self._apply_keymap_zoom(self.container.get_scale() + delta)
         self.refresh_layer_display()
 
+    def zoom_in(self):
+        self.adjust_size(False)
+
+    def zoom_out(self):
+        self.adjust_size(True)
+
     def rebuild(self, device):
         super().rebuild(device)
         if self.valid():
