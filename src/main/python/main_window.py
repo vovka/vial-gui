@@ -252,7 +252,7 @@ class MainWindow(QMainWindow):
         keymap_zoom_in_act.triggered.connect(self.keymap_editor.zoom_in)
 
         keymap_zoom_out_act = QAction(tr("MenuNavigation", "Keymap zoom out"), self)
-        keymap_zoom_out_act.setShortcut(QKeySequence("Alt+."))
+        keymap_zoom_out_act.setShortcut(QKeySequence("Alt+-"))
         keymap_zoom_out_act.setShortcutContext(Qt.WindowShortcut)
         keymap_zoom_out_act.triggered.connect(self.keymap_editor.zoom_out)
 
