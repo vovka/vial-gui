@@ -1018,7 +1018,7 @@ def _split_macro_preview(preview, chars_per_line):
 
     best_split = None
     best_score = None
-    for split_idx in range(1, len(words)):
+    for split_idx in range(len(words) - 1, 0, -1):
         first = " ".join(words[:split_idx])
         second = " ".join(words[split_idx:])
         if len(first) <= chars_per_line and len(second) <= chars_per_line:
