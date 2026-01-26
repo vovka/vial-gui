@@ -26,6 +26,49 @@ class ComboGeometry:
         return any(ComboGeometry.segments_intersect(p1, p2, e1, e2) for e1, e2 in edges)
 
     @staticmethod
+    def ray_rect_edge_intersection(start, rect):
+        """Return the rectangle edge intersection from start toward the rect center."""
+        center = rect.center()
+        if rect.contains(start):
+            return center
+
+        dx = center.x() - start.x()
+        dy = center.y() - start.y()
+        if dx == 0 and dy == 0:
+            return center
+
+        candidates = []
+        if dx != 0:
+            t = (rect.left() - start.x()) / dx
+            if 0 <= t <= 1:
+                y = start.y() + t * dy
+                if rect.top() <= y <= rect.bottom():
+                    candidates.append((t, QPointF(rect.left(), y)))
+            t = (rect.right() - start.x()) / dx
+            if 0 <= t <= 1:
+                y = start.y() + t * dy
+                if rect.top() <= y <= rect.bottom():
+                    candidates.append((t, QPointF(rect.right(), y)))
+
+        if dy != 0:
+            t = (rect.top() - start.y()) / dy
+            if 0 <= t <= 1:
+                x = start.x() + t * dx
+                if rect.left() <= x <= rect.right():
+                    candidates.append((t, QPointF(x, rect.top())))
+            t = (rect.bottom() - start.y()) / dy
+            if 0 <= t <= 1:
+                x = start.x() + t * dx
+                if rect.left() <= x <= rect.right():
+                    candidates.append((t, QPointF(x, rect.bottom())))
+
+        if not candidates:
+            return center
+
+        _, point = min(candidates, key=lambda item: item[0])
+        return point
+
+    @staticmethod
     def _get_rect_edges(rect):
         """Return the four edges of a rectangle as point pairs."""
         return [
