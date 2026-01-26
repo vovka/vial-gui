@@ -1088,7 +1088,7 @@ def update_macro_labels(keyboard):
                 kc.font_scale = 0.7
             else:
                 # Keep the default label for non-text macros
-                kc.label = 'M{}'.format(idx)
+                kc.label = 'M({})'.format(idx)
                 kc.tooltip = 'Macro {}'.format(idx)
                 kc.font_scale = 1.0
 
