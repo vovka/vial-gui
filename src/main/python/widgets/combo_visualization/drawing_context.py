@@ -5,6 +5,7 @@ from PyQt5.QtGui import QColor, QPen, QBrush, QFontMetrics, QPainter, QPalette
 from PyQt5.QtWidgets import QApplication
 
 from constants import KEY_ROUNDNESS
+from widgets.combo_visualization.geometry import ComboGeometry
 
 
 class ComboDrawingContext:
@@ -71,8 +72,9 @@ class ComboDrawingContext:
         self.qp.setPen(self.line_pen)
         start = self._get_dendron_start(combo)
         for widget in combo.widgets:
-            key_center = widget.polygon.boundingRect().center()
-            path = renderer.create_line_path(combo, start, key_center)
+            key_rect = widget.polygon.boundingRect()
+            key_edge = ComboGeometry.ray_rect_edge_intersection(start, key_rect)
+            path = renderer.create_line_path(combo, start, key_edge)
             self.qp.drawPath(path)
 
     def _get_dendron_start(self, combo):
