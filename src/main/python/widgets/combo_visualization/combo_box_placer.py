@@ -32,10 +32,16 @@ class ComboBoxPlacer:
         avg_size = sum(key_sizes) / len(key_sizes)
         adjacent = self._are_keys_adjacent(key_centers, avg_size)
 
-        if adjacent:
+        if adjacent and not self._are_vertically_aligned(key_centers, avg_size):
             return centroid, Alignment.MID
-        return self._compute_external_placement(key_centers, centroid,
-                                                avg_size, box_height)
+        return self._compute_external_placement(key_centers, centroid, avg_size, box_height)
+
+    def _are_vertically_aligned(self, centers: List[Point], avg_size: float) -> bool:
+        """Check if keys are vertically stacked (small x-spread)."""
+        if len(centers) < 2:
+            return False
+        xs = [p.x for p in centers]
+        return (max(xs) - min(xs)) < avg_size * 0.8
 
     def _compute_centroid(self, points: List[Point]) -> Point:
         """Calculate centroid of all points."""
