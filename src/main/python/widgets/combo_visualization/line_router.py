@@ -9,7 +9,6 @@ from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtGui import QPainterPath
 
 ARC_RADIUS = 6.0
-KEY_PADDING = 4.0
 
 
 class ComboLineRouter:
@@ -18,9 +17,9 @@ class ComboLineRouter:
     def __init__(self, obstacles, avg_size):
         self.obstacles = obstacles
         self.avg_size = avg_size
-        self.arc_radius = min(ARC_RADIUS, avg_size * 0.15)
+        self.arc_radius = min(ARC_RADIUS, avg_size * 0.12)
 
-    def create_path(self, start, end, combo_key_rects, x_first=None):
+    def create_path(self, start, end, combo_key_rects, x_first=True):
         """Create an L-shaped arc path from start to end."""
         path = QPainterPath()
         path.moveTo(start)
@@ -28,10 +27,7 @@ class ComboLineRouter:
         dx = end.x() - start.x()
         dy = end.y() - start.y()
 
-        if x_first is None:
-            x_first = abs(dy) > abs(dx)
-
-        if abs(dx) < 1 and abs(dy) < 1:
+        if abs(dx) < 0.1 and abs(dy) < 0.1:
             return path
 
         if abs(dx) < self.arc_radius * 2 or abs(dy) < self.arc_radius * 2:
@@ -48,53 +44,25 @@ class ComboLineRouter:
         r = self.arc_radius
 
         if x_first:
-            corner = QPointF(end.x(), start.y())
-            self._add_horizontal_then_vertical(path, start, corner, end, dx, dy, r)
+            mid_x = end.x()
+            mid_y = start.y()
         else:
-            corner = QPointF(start.x(), end.y())
-            self._add_vertical_then_horizontal(path, start, corner, end, dx, dy, r)
+            mid_x = start.x()
+            mid_y = end.y()
 
-    def _add_horizontal_then_vertical(self, path, start, corner, end, dx, dy, r):
-        """Draw horizontal line, arc, then vertical line."""
-        x_dir = 1 if dx > 0 else -1
-        y_dir = 1 if dy > 0 else -1
+        x_sign = 1 if dx > 0 else -1
+        y_sign = 1 if dy > 0 else -1
 
-        arc_start_x = corner.x() - x_dir * r
-        arc_end_y = corner.y() + y_dir * r
-
-        path.lineTo(arc_start_x, start.y())
-
-        arc_rect = self._get_arc_rect(corner, x_dir, y_dir, r)
-        start_angle = 90 if y_dir < 0 else 270
-        sweep = -90 * x_dir * y_dir
-
-        path.arcTo(arc_rect, start_angle, sweep)
-        path.lineTo(end)
-
-    def _add_vertical_then_horizontal(self, path, start, corner, end, dx, dy, r):
-        """Draw vertical line, arc, then horizontal line."""
-        x_dir = 1 if dx > 0 else -1
-        y_dir = 1 if dy > 0 else -1
-
-        arc_start_y = corner.y() - y_dir * r
-        arc_end_x = corner.x() + x_dir * r
-
-        path.lineTo(start.x(), arc_start_y)
-
-        arc_rect = self._get_arc_rect(corner, x_dir, y_dir, r)
-        start_angle = 180 if x_dir > 0 else 0
-        sweep = 90 * x_dir * y_dir
-
-        path.arcTo(arc_rect, start_angle, sweep)
-        path.lineTo(end)
-
-    def _get_arc_rect(self, corner, x_dir, y_dir, r):
-        """Get the bounding rect for the arc."""
-        if x_dir > 0 and y_dir > 0:
-            return QRectF(corner.x() - r, corner.y(), r * 2, r * 2)
-        elif x_dir > 0 and y_dir < 0:
-            return QRectF(corner.x() - r, corner.y() - r * 2, r * 2, r * 2)
-        elif x_dir < 0 and y_dir > 0:
-            return QRectF(corner.x() - r, corner.y(), r * 2, r * 2)
+        if x_first:
+            arc_start = QPointF(mid_x - x_sign * r, start.y())
+            arc_end = QPointF(mid_x, start.y() + y_sign * r)
         else:
-            return QRectF(corner.x() - r, corner.y() - r * 2, r * 2, r * 2)
+            arc_start = QPointF(start.x(), mid_y - y_sign * r)
+            arc_end = QPointF(start.x() + x_sign * r, mid_y)
+
+        path.lineTo(arc_start)
+
+        ctrl = QPointF(mid_x, mid_y)
+        path.quadTo(ctrl, arc_end)
+
+        path.lineTo(end)

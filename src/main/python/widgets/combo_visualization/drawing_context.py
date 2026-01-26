@@ -1,6 +1,6 @@
 """Drawing context for combo visualization."""
 
-from PyQt5.QtCore import QRectF, Qt
+from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QColor, QPen, QBrush, QFontMetrics, QPainter, QPalette
 from PyQt5.QtWidgets import QApplication
 
@@ -69,11 +69,24 @@ class ComboDrawingContext:
     def _draw_lines(self, combo, renderer):
         """Draw connecting lines from label to keys."""
         self.qp.setPen(self.line_pen)
-        rect_center = combo.rect.center()
+        start = self._get_dendron_start(combo)
         for widget in combo.widgets:
             key_center = widget.polygon.boundingRect().center()
-            path = renderer.create_line_path(combo, rect_center, key_center)
+            path = renderer.create_line_path(combo, start, key_center)
             self.qp.drawPath(path)
+
+    def _get_dendron_start(self, combo):
+        """Get the starting point for dendrons based on alignment."""
+        rect = combo.rect
+        if combo.alignment == 'top':
+            return QPointF(rect.center().x(), rect.bottom())
+        elif combo.alignment == 'bottom':
+            return QPointF(rect.center().x(), rect.top())
+        elif combo.alignment == 'left':
+            return QPointF(rect.right(), rect.center().y())
+        elif combo.alignment == 'right':
+            return QPointF(rect.left(), rect.center().y())
+        return rect.center()
 
     def _draw_label_box(self, combo):
         """Draw the label background box."""
