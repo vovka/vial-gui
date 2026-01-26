@@ -1,5 +1,7 @@
 """Combo visualization renderer orchestration."""
 
+import hashlib
+
 from widgets.combo_visualization.layout_analyzer import ComboLayoutAnalyzer
 from widgets.combo_visualization.label_placer import ComboLabelPlacer
 from widgets.combo_visualization.direction_calculator import DirectionCalculator
@@ -64,4 +66,13 @@ class ComboRenderer:
         """Create an arc dendron path for a combo."""
         router = ComboLineRouter(self.key_rects, combo.avg_size)
         x_first = combo.alignment in ('top', 'bottom')
-        return router.create_path(start, end, combo.key_rects, x_first)
+        offset = self._combo_offset(combo) if combo.alignment in ('top', 'bottom', 'left', 'right') else 0.0
+        return router.create_path(start, end, combo.key_rects, x_first, offset=offset, label_rect=combo.rect)
+
+    def _combo_offset(self, combo):
+        """Compute a small deterministic offset for a combo."""
+        seed = f"{combo.combo_label}|{combo.output_label}|{len(combo.widgets)}"
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+        step = int(digest[:2], 16) % 5 - 2
+        unit = max(1.0, combo.avg_size * 0.08)
+        return step * unit
