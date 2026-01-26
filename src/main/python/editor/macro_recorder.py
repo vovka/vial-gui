@@ -261,6 +261,7 @@ class MacroRecorder(BasicEditor):
             self._reload_tab(i, actions)
         self.suppress_change = False
         self.on_change()
+        update_macro_labels(self.keyboard)
         KeycodeDisplay.refresh_clients()
 
     def _reload_tab(self, index, actions):
