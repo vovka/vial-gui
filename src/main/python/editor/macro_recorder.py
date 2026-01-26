@@ -188,39 +188,35 @@ class MacroRecorder(BasicEditor):
         self.on_change()
 
     def on_tabs_reordered(self, from_index, to_index, is_swap):
-        """Handle tab reordering via drag-and-drop.
-
-        Args:
-            from_index: Source tab index
-            to_index: Target tab index
-            is_swap: If True, swap the two tabs. If False, insert and shift others.
-        """
+        """Handle tab reordering via drag-and-drop."""
         if from_index == to_index:
             return
+        all_actions = self._collect_all_actions()
+        all_actions = self._reorder_actions(all_actions, from_index, to_index, is_swap)
+        self._apply_reordered_actions(all_actions)
+        self.tabs.setCurrentIndex(to_index)
 
-        # Save current actions from all tabs
-        all_actions = [self.macro_tabs[i].actions()[:] for i in range(self.keyboard.macro_count)]
+    def _collect_all_actions(self):
+        return [self.macro_tabs[i].actions()[:] for i in range(self.keyboard.macro_count)]
 
+    def _reorder_actions(self, all_actions, from_index, to_index, is_swap):
         if is_swap:
-            # Swap mode: exchange positions of from_index and to_index
             all_actions[from_index], all_actions[to_index] = all_actions[to_index], all_actions[from_index]
         else:
-            # Insert mode: remove from source and insert at target
             actions = all_actions.pop(from_index)
             all_actions.insert(to_index, actions)
+        return all_actions
 
-        # Reload all tabs with new data
+    def _apply_reordered_actions(self, all_actions):
         self.suppress_change = True
         for i, actions in enumerate(all_actions):
-            tab = self.macro_tabs[i]
-            tab.clear()
-            for act in actions:
-                tab.add_action(ui_action[type(act)](tab.container, act))
+            self._reload_tab(i, actions)
         self.suppress_change = False
-
-        # Update display and refresh keymap
         self.on_change()
         KeycodeDisplay.refresh_clients()
 
-        # Switch to the moved tab's new position
-        self.tabs.setCurrentIndex(to_index)
+    def _reload_tab(self, index, actions):
+        tab = self.macro_tabs[index]
+        tab.clear()
+        for act in actions:
+            tab.add_action(ui_action[type(act)](tab.container, act))
