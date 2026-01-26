@@ -172,12 +172,12 @@ class TapDance(BasicEditor):
         for x, e in enumerate(self.tap_dance_entries):
             current = self.tap_dance_entries[x].save()
             is_free = self.is_entry_free(current)
+            needs_attention = x in unused_tap_dances
+            attention_tooltip = unused_tap_dances.get(x)
             if current != self.keyboard.tap_dance_get(x):
                 has_changes = True
-                self.tabs.set_tab_label(x, "{}*".format(x), is_free)
+                self.tabs.set_tab_label(x, "{}*".format(x), is_free, needs_attention, attention_tooltip)
             else:
-                needs_attention = x in unused_tap_dances
-                attention_tooltip = unused_tap_dances.get(x)
                 self.tabs.set_tab_label(x, str(x), is_free, needs_attention, attention_tooltip)
         self.btn_save.setEnabled(has_changes)
 
