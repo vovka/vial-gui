@@ -1,35 +1,35 @@
 """Data classes for combo visualization."""
 
-from dataclasses import dataclass
-from typing import List
-
 from .point import Point
 from .combo_box_placer import Alignment
 
 
-@dataclass
 class KeyInfo:
     """Information about a key in a combo."""
-    center: Point
-    size: float
-    widget: object  # Reference to the original KeyWidget
+
+    def __init__(self, center, size, widget):
+        self.center = center
+        self.size = size
+        self.widget = widget
 
 
-@dataclass
 class ComboSpec:
     """Specification for a single combo to render."""
-    keys: List[KeyInfo]
-    output_label: str
-    combo_label: str
+
+    def __init__(self, keys, output_label, combo_label):
+        self.keys = keys
+        self.output_label = output_label
+        self.combo_label = combo_label
 
 
-@dataclass
 class ComboPlacement:
     """Computed placement for a combo box."""
-    position: Point
-    alignment: Alignment
-    width: float
-    height: float
-    keys: List[KeyInfo]
-    output_label: str
-    combo_label: str
+
+    def __init__(self, position, alignment, width, height, keys, output_label, combo_label):
+        self.position = position
+        self.alignment = alignment
+        self.width = width
+        self.height = height
+        self.keys = keys
+        self.output_label = output_label
+        self.combo_label = combo_label
