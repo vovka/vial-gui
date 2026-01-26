@@ -18,6 +18,7 @@ class ComboData:
         self.adjacent = False
         self.rect = None
         self.alignment = 'top'
+        self.line_offset = 0.0
 
     def compute_geometry(self, adjacency_threshold_ratio=1.7):
         """Compute bounding box, centers, and adjacency."""

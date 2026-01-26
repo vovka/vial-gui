@@ -1,5 +1,7 @@
 """Combo visualization renderer orchestration."""
 
+from PyQt5.QtCore import QPointF
+
 from widgets.combo_visualization.layout_analyzer import ComboLayoutAnalyzer
 from widgets.combo_visualization.label_placer import ComboLabelPlacer
 from widgets.combo_visualization.direction_calculator import DirectionCalculator
@@ -29,11 +31,12 @@ class ComboRenderer:
             self.padding, self.analyzer.split_gap
         )
 
-        for combo in combos_data:
+        for idx, combo in enumerate(combos_data):
             combo.compute_geometry()
             combo_info = self._build_combo_info(combo)
             combo.rect = placer.find_best_position(combo_info)
             combo.compute_alignment()
+            combo.line_offset = self._compute_line_offset(idx, combo.avg_size)
 
         return combos_data
 
@@ -64,4 +67,19 @@ class ComboRenderer:
         """Create an arc dendron path for a combo."""
         router = ComboLineRouter(self.key_rects, combo.avg_size)
         x_first = combo.alignment in ('top', 'bottom')
+        offset = combo.line_offset
+        if offset:
+            if x_first:
+                start = QPointF(start.x(), start.y() + offset)
+                end = QPointF(end.x(), end.y() + offset)
+            else:
+                start = QPointF(start.x() + offset, start.y())
+                end = QPointF(end.x() + offset, end.y())
         return router.create_path(start, end, combo.key_rects, x_first)
+
+    @staticmethod
+    def _compute_line_offset(index, avg_size):
+        """Compute a small per-combo offset to stagger overlapping lines."""
+        order = (0, 1, -1, 2, -2, 3, -3)
+        step = max(1.0, avg_size * 0.06)
+        return order[index % len(order)] * step
