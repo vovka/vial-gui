@@ -4,7 +4,7 @@ import sys
 from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel
 
 from editor.basic_editor import BasicEditor
-from keycodes.keycodes import update_macro_labels
+from keycodes.keycodes import update_macro_labels, find_unused_macros
 from macro.macro_action import ActionText, ActionTap, ActionDown, ActionUp
 from macro.macro_action_ui import ui_action
 from macro.macro_key import KeyString, KeyDown, KeyUp, KeyTap
@@ -96,12 +96,15 @@ class MacroRecorder(BasicEditor):
 
     def update_tab_titles(self):
         macros = self.keyboard.macro.split(b"\x00")
+        unused_macros = find_unused_macros(self.keyboard)
         for x, w in enumerate(self.macro_tab_w[:self.keyboard.macro_count]):
             title = "M{}".format(x)
             if macros[x] != self.keyboard.macro_serialize(self.macro_tabs[x].actions()):
                 title += "*"
             is_free = len(self.macro_tabs[x].actions()) == 0
-            self.tabs.set_tab_label(x, title, is_free)
+            needs_attention = x in unused_macros
+            attention_tooltip = unused_macros.get(x)
+            self.tabs.set_tab_label(x, title, is_free, needs_attention, attention_tooltip)
 
     def on_record(self, tab, append):
         self.recording_tab = tab

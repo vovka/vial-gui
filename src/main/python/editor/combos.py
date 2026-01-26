@@ -4,6 +4,7 @@ from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtWidgets import QWidget, QSizePolicy, QGridLayout, QVBoxLayout, QLabel
 
 from protocol.constants import VIAL_PROTOCOL_DYNAMIC
+from keycodes.keycodes import find_unusable_combos
 from widgets.key_widget import KeyWidget
 from vial_device import VialKeyboard
 from editor.basic_editor import BasicEditor
@@ -115,9 +116,12 @@ class Combos(BasicEditor):
         self.update_tab_labels()
 
     def update_tab_labels(self):
+        unusable_combos = find_unusable_combos(self.keyboard)
         for x, e in enumerate(self.combo_entries):
             is_free = self.is_entry_free(e.save())
-            self.tabs.set_tab_label(x, str(x + 1), is_free)
+            needs_attention = x in unusable_combos
+            attention_tooltip = unusable_combos.get(x)
+            self.tabs.set_tab_label(x, str(x + 1), is_free, needs_attention, attention_tooltip)
 
     def is_entry_free(self, entry):
         return all(keycode == "KC_NO" for keycode in entry)

@@ -1111,4 +1111,211 @@ def update_tap_dance_labels(keyboard):
         kc.font_scale = _tap_dance_font_scale(label.count("\n") + 1)
 
 
+def collect_keycodes_in_layout(keyboard):
+    """
+    Collect all keycodes used in the keyboard layout, including:
+    - Matrix keys from all layers
+    - Encoder keys from all layers
+    - Inner keycodes from masked keycodes (e.g., KC_A from LSFT(KC_A))
+
+    Returns a set of keycode strings.
+    """
+    used = set()
+
+    def add_keycode(kc):
+        if not kc or kc == "KC_NO" or kc == "KC_TRNS":
+            return
+        used.add(kc)
+        # Also extract inner keycodes from masked keycodes
+        if Keycode.is_mask(kc):
+            inner = Keycode.find_inner_keycode(kc)
+            if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                add_keycode(inner.qmk_id)
+
+    # Collect from matrix layout
+    for keycode in keyboard.layout.values():
+        add_keycode(keycode)
+
+    # Collect from encoder layout
+    for keycode in keyboard.encoder_layout.values():
+        add_keycode(keycode)
+
+    return used
+
+
+def collect_keycodes_in_tap_dances(keyboard):
+    """
+    Collect all keycodes referenced within tap dance entries.
+    This includes on_tap, on_hold, on_double_tap, on_tap_hold keycodes.
+
+    Returns a set of keycode strings.
+    """
+    used = set()
+    entries = getattr(keyboard, "tap_dance_entries", [])
+    for entry in entries:
+        for kc in entry[:4]:  # First 4 elements are keycodes
+            if kc and kc != "KC_NO":
+                used.add(kc)
+                if Keycode.is_mask(kc):
+                    inner = Keycode.find_inner_keycode(kc)
+                    if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                        used.add(inner.qmk_id)
+    return used
+
+
+def collect_keycodes_in_combos(keyboard):
+    """
+    Collect all keycodes referenced within combo entries (output keys).
+
+    Returns a set of keycode strings.
+    """
+    used = set()
+    entries = getattr(keyboard, "combo_entries", [])
+    for entry in entries:
+        # Entry is (key1, key2, key3, key4, output)
+        # The output key could reference TD or M
+        output = entry[4] if len(entry) > 4 else None
+        if output and output != "KC_NO":
+            used.add(output)
+            if Keycode.is_mask(output):
+                inner = Keycode.find_inner_keycode(output)
+                if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                    used.add(inner.qmk_id)
+    return used
+
+
+def find_unused_macros(keyboard):
+    """
+    Find macros that are configured but not used anywhere in the layout.
+
+    Returns a dict mapping macro index to reason string, for macros that need attention.
+    """
+    if not hasattr(keyboard, 'macro') or not keyboard.macro:
+        return {}
+
+    # Collect all keycodes used in layout, tap dances, and combo outputs
+    used_keycodes = collect_keycodes_in_layout(keyboard)
+    used_keycodes |= collect_keycodes_in_tap_dances(keyboard)
+    used_keycodes |= collect_keycodes_in_combos(keyboard)
+
+    # Check which macros have content but are not used
+    unused = {}
+    macros = keyboard.macros_deserialize(keyboard.macro)
+
+    for idx, macro_actions in enumerate(macros):
+        if idx >= keyboard.macro_count:
+            break
+        # Skip empty macros
+        if not macro_actions:
+            continue
+        # Check if M{idx} is used
+        macro_keycode = "M{}".format(idx)
+        if macro_keycode not in used_keycodes:
+            unused[idx] = "M{} is not assigned to any key".format(idx)
+
+    return unused
+
+
+def find_unused_tap_dances(keyboard):
+    """
+    Find tap dances that are configured but not used anywhere.
+
+    Returns a dict mapping tap dance index to reason string.
+    """
+    entries = getattr(keyboard, "tap_dance_entries", [])
+    if not entries:
+        return {}
+
+    # Collect all keycodes used in layout and combo outputs
+    used_keycodes = collect_keycodes_in_layout(keyboard)
+    used_keycodes |= collect_keycodes_in_combos(keyboard)
+
+    # Also check if tap dances reference other tap dances
+    # Build a map of which TDs are referenced by other TDs
+    td_references = set()
+    for entry in entries:
+        for kc in entry[:4]:
+            if kc and kc.startswith("TD("):
+                td_references.add(kc)
+            elif kc and Keycode.is_mask(kc):
+                inner = Keycode.find_inner_keycode(kc)
+                if inner and inner.qmk_id.startswith("TD("):
+                    td_references.add(inner.qmk_id)
+
+    unused = {}
+    for idx, entry in enumerate(entries):
+        if idx >= keyboard.tap_dance_count:
+            break
+        # Skip empty entries
+        if all(kc == "KC_NO" for kc in entry[:4]):
+            continue
+        # Check if TD(idx) is used
+        td_keycode = "TD({})".format(idx)
+        if td_keycode not in used_keycodes and td_keycode not in td_references:
+            unused[idx] = "TD({}) is not assigned to any key".format(idx)
+
+    return unused
+
+
+def find_unusable_combos(keyboard):
+    """
+    Find combos whose input keys don't exist in the layout.
+
+    Returns a dict mapping combo index to reason string.
+    """
+    entries = getattr(keyboard, "combo_entries", [])
+    if not entries:
+        return {}
+
+    # Collect all keycodes in the layout
+    layout_keycodes = collect_keycodes_in_layout(keyboard)
+
+    # For combo detection, we need to check the base keycodes
+    # Extract base keycodes (without modifiers) from the layout
+    base_keycodes = set()
+    for kc in layout_keycodes:
+        if kc == "KC_NO" or kc == "KC_TRNS":
+            continue
+        base_keycodes.add(kc)
+        # For masked keycodes, also add the base key
+        if Keycode.is_mask(kc):
+            inner = Keycode.find_inner_keycode(kc)
+            if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                base_keycodes.add(inner.qmk_id)
+
+    unusable = {}
+    for idx, entry in enumerate(entries):
+        if idx >= keyboard.combo_count:
+            break
+        # Skip empty entries
+        if all(kc == "KC_NO" for kc in entry):
+            continue
+
+        # Get non-empty input keys (first 4 elements)
+        input_keys = [kc for kc in entry[:4] if kc and kc != "KC_NO"]
+        if not input_keys:
+            continue
+
+        # Check which input keys are missing from the layout
+        missing_keys = []
+        for kc in input_keys:
+            # Check direct match
+            found = kc in base_keycodes
+            # Also check if the base key exists (for modified keys in combo)
+            if not found and Keycode.is_mask(kc):
+                inner = Keycode.find_inner_keycode(kc)
+                if inner and inner.qmk_id in base_keycodes:
+                    found = True
+            if not found:
+                missing_keys.append(Keycode.label(kc) or kc)
+
+        if missing_keys:
+            if len(missing_keys) == 1:
+                unusable[idx] = "Key {} is not in the layout".format(missing_keys[0])
+            else:
+                unusable[idx] = "Keys {} are not in the layout".format(", ".join(missing_keys))
+
+    return unusable
+
+
 recreate_keycodes()

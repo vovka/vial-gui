@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QTabWidget, QWidget, QSizePolicy, QGridLayout, QVBox
     QPushButton, QSpinBox
 
 from protocol.constants import VIAL_PROTOCOL_DYNAMIC
-from keycodes.keycodes import update_tap_dance_labels
+from keycodes.keycodes import update_tap_dance_labels, find_unused_tap_dances
 from widgets.key_widget import KeyWidget
 from tabbed_keycodes import TabbedKeycodes
 from util import tr, KeycodeDisplay
@@ -168,6 +168,7 @@ class TapDance(BasicEditor):
     def update_modified_state(self):
         """ Update indication of which tabs are modified, and keep Save button enabled only if it's needed """
         has_changes = False
+        unused_tap_dances = find_unused_tap_dances(self.keyboard)
         for x, e in enumerate(self.tap_dance_entries):
             current = self.tap_dance_entries[x].save()
             is_free = self.is_entry_free(current)
@@ -175,7 +176,9 @@ class TapDance(BasicEditor):
                 has_changes = True
                 self.tabs.set_tab_label(x, "{}*".format(x), is_free)
             else:
-                self.tabs.set_tab_label(x, str(x), is_free)
+                needs_attention = x in unused_tap_dances
+                attention_tooltip = unused_tap_dances.get(x)
+                self.tabs.set_tab_label(x, str(x), is_free, needs_attention, attention_tooltip)
         self.btn_save.setEnabled(has_changes)
 
     def is_entry_free(self, entry):
