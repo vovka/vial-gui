@@ -1016,7 +1016,7 @@ def _split_macro_preview(preview, chars_per_line):
             return [first, remaining]
         return [first]
 
-    for split_idx in range(1, len(words)):
+    for split_idx in range(len(words) - 1, 0, -1):
         first = " ".join(words[:split_idx])
         second = " ".join(words[split_idx:])
         if len(first) <= chars_per_line and len(second) <= chars_per_line:
@@ -1031,8 +1031,10 @@ def _split_macro_preview(preview, chars_per_line):
             break
 
     if not line_words:
-        first = preview[:chars_per_line]
-        remaining = preview[chars_per_line:]
+        long_word = words[0]
+        first = long_word[:chars_per_line]
+        remaining_words = [long_word[chars_per_line:]] + words[1:]
+        remaining = " ".join(filter(None, remaining_words))
     else:
         first = " ".join(line_words)
         remaining = " ".join(words[len(line_words):])
