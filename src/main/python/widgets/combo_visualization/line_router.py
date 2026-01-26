@@ -1,11 +1,6 @@
-"""Arc-style dendron routing for combo visualization.
+"""Arc-style dendron routing for combo visualization."""
 
-Implements L-shaped paths with rounded corners, similar to keymap-drawer.
-"""
-
-import math
-
-from PyQt5.QtCore import QPointF, QRectF
+from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QPainterPath
 
 ARC_RADIUS = 6.0
@@ -19,8 +14,8 @@ class ComboLineRouter:
         self.avg_size = avg_size
         self.arc_radius = min(ARC_RADIUS, avg_size * 0.12)
 
-    def create_path(self, start, end, combo_key_rects, x_first=True):
-        """Create an L-shaped arc path from start to end."""
+    def create_path(self, start, end, combo_key_rects, alignment):
+        """Create a smooth arc path from start to end."""
         path = QPainterPath()
         path.moveTo(start)
 
@@ -34,35 +29,26 @@ class ComboLineRouter:
             path.lineTo(end)
             return path
 
-        self._draw_arc_dendron(path, start, end, x_first)
+        self._draw_arc_curve(path, start, end, alignment)
         return path
 
-    def _draw_arc_dendron(self, path, start, end, x_first):
-        """Draw an L-shaped path with rounded corner."""
+    def _draw_arc_curve(self, path, start, end, alignment):
+        """Draw a smooth cubic curve biased by alignment."""
         dx = end.x() - start.x()
         dy = end.y() - start.y()
-        r = self.arc_radius
+        control = self.arc_radius * 3
 
-        if x_first:
-            mid_x = end.x()
-            mid_y = start.y()
+        if alignment in ('top', 'bottom'):
+            mid_y = (start.y() + end.y()) / 2.0
+            y_sign = 1 if dy >= 0 else -1
+            offset = QPointF(0.0, control * y_sign)
+            ctrl1 = QPointF(start.x(), mid_y) + offset
+            ctrl2 = QPointF(end.x(), mid_y) + offset
         else:
-            mid_x = start.x()
-            mid_y = end.y()
+            mid_x = (start.x() + end.x()) / 2.0
+            x_sign = 1 if dx >= 0 else -1
+            offset = QPointF(control * x_sign, 0.0)
+            ctrl1 = QPointF(mid_x, start.y()) + offset
+            ctrl2 = QPointF(mid_x, end.y()) + offset
 
-        x_sign = 1 if dx > 0 else -1
-        y_sign = 1 if dy > 0 else -1
-
-        if x_first:
-            arc_start = QPointF(mid_x - x_sign * r, start.y())
-            arc_end = QPointF(mid_x, start.y() + y_sign * r)
-        else:
-            arc_start = QPointF(start.x(), mid_y - y_sign * r)
-            arc_end = QPointF(start.x() + x_sign * r, mid_y)
-
-        path.lineTo(arc_start)
-
-        ctrl = QPointF(mid_x, mid_y)
-        path.quadTo(ctrl, arc_end)
-
-        path.lineTo(end)
+        path.cubicTo(ctrl1, ctrl2, end)
