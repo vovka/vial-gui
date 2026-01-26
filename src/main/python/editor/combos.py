@@ -82,6 +82,7 @@ class Combos(BasicEditor):
         self.combo_entries = []
         self.combo_entries_available = []
         self.tabs = TabWidgetWithKeycodes()
+        self.tabs.tabs_reordered.connect(self.on_tabs_reordered)
         for x in range(128):
             entry = ComboEntryUI(x)
             entry.key_changed.connect(self.on_key_changed)
@@ -125,3 +126,39 @@ class Combos(BasicEditor):
 
     def is_entry_free(self, entry):
         return all(keycode == "KC_NO" for keycode in entry)
+
+    def on_tabs_reordered(self, from_index, to_index, is_swap):
+        """Handle tab reordering via drag-and-drop.
+
+        Args:
+            from_index: Source tab index
+            to_index: Target tab index
+            is_swap: If True, swap the two tabs. If False, insert and shift others.
+        """
+        if from_index == to_index:
+            return
+
+        # Save current data from all entries
+        all_data = [self.combo_entries[i].save() for i in range(len(self.combo_entries))]
+
+        if is_swap:
+            # Swap mode: exchange positions of from_index and to_index
+            all_data[from_index], all_data[to_index] = all_data[to_index], all_data[from_index]
+        else:
+            # Insert mode: remove from source and insert at target
+            data = all_data.pop(from_index)
+            all_data.insert(to_index, data)
+
+        # Reload all entries with new data
+        for i, data in enumerate(all_data):
+            self.combo_entries[i].load(data)
+            self.keyboard.combo_set(i, data)
+
+        # Update tab labels
+        self.update_tab_labels()
+
+        # Switch to the moved tab's new position
+        if is_swap:
+            self.tabs.setCurrentIndex(to_index)
+        else:
+            self.tabs.setCurrentIndex(to_index)
