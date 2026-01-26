@@ -1292,16 +1292,18 @@ def find_unusable_combos(keyboard):
 
     # For combo detection, we need to check the base keycodes
     # Extract base keycodes (without modifiers) from the layout
-    base_keycodes = set()
-    for kc in layout_keycodes:
-        if kc == "KC_NO" or kc == "KC_TRNS":
-            continue
-        base_keycodes.add(kc)
-        # For masked keycodes, also add the base key
+    def add_keycodes_recursively(kc, target_set):
+        if not kc or kc in ("KC_NO", "KC_TRNS"):
+            return
+        target_set.add(kc)
         if Keycode.is_mask(kc):
             inner = Keycode.find_inner_keycode(kc)
             if inner and inner.qmk_id not in ("KC_NO", "kc"):
-                base_keycodes.add(inner.qmk_id)
+                add_keycodes_recursively(inner.qmk_id, target_set)
+
+    base_keycodes = set()
+    for kc in layout_keycodes:
+        add_keycodes_recursively(kc, base_keycodes)
 
     unusable = {}
     for idx, entry in enumerate(entries):
@@ -1317,16 +1319,21 @@ def find_unusable_combos(keyboard):
             continue
 
         # Check which input keys are missing from the layout
+        def is_in_layout(kc):
+            """Recursively check if keycode or any inner keycode is in layout."""
+            if not kc or kc in ("KC_NO", "KC_TRNS"):
+                return False
+            if kc in base_keycodes:
+                return True
+            if Keycode.is_mask(kc):
+                inner = Keycode.find_inner_keycode(kc)
+                if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                    return is_in_layout(inner.qmk_id)
+            return False
+
         missing_keys = []
         for kc in input_keys:
-            # Check direct match
-            found = kc in base_keycodes
-            # Also check if the base key exists (for modified keys in combo)
-            if not found and Keycode.is_mask(kc):
-                inner = Keycode.find_inner_keycode(kc)
-                if inner and inner.qmk_id in base_keycodes:
-                    found = True
-            if not found:
+            if not is_in_layout(kc):
                 missing_keys.append(Keycode.label(kc) or kc)
 
         if missing_keys:
