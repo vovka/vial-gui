@@ -1243,14 +1243,24 @@ def find_unused_tap_dances(keyboard):
     # Also check if tap dances reference other tap dances
     # Build a map of which TDs are referenced by other TDs
     td_references = set()
+
+    def find_inner_td(kc):
+        """Recursively find TD keycode inside nested masks."""
+        if not kc:
+            return None
+        if kc.startswith("TD("):
+            return kc
+        if Keycode.is_mask(kc):
+            inner = Keycode.find_inner_keycode(kc)
+            if inner and inner.qmk_id not in ("KC_NO", "kc"):
+                return find_inner_td(inner.qmk_id)
+        return None
+
     for entry in entries:
         for kc in entry[:4]:
-            if kc and kc.startswith("TD("):
-                td_references.add(kc)
-            elif kc and Keycode.is_mask(kc):
-                inner = Keycode.find_inner_keycode(kc)
-                if inner and inner.qmk_id.startswith("TD("):
-                    td_references.add(inner.qmk_id)
+            td_kc = find_inner_td(kc)
+            if td_kc:
+                td_references.add(td_kc)
 
     unused = {}
     for idx, entry in enumerate(entries):
