@@ -3,14 +3,13 @@
 Implements L-shaped paths with rounded corners, similar to keymap-drawer.
 """
 
-import math
-
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtGui import QPainterPath
 
 from widgets.combo_visualization.geometry import ComboGeometry
 
 ARC_RADIUS = 6.0
+ARC_KAPPA = 0.5522847498
 
 
 class ComboLineRouter:
@@ -65,8 +64,13 @@ class ComboLineRouter:
 
         path.lineTo(arc_start)
 
-        ctrl = QPointF(mid_x, mid_y)
-        path.quadTo(ctrl, arc_end)
+        if x_first:
+            ctrl_1 = QPointF(arc_start.x(), arc_start.y() + y_sign * r * ARC_KAPPA)
+            ctrl_2 = QPointF(arc_end.x() - x_sign * r * ARC_KAPPA, arc_end.y())
+        else:
+            ctrl_1 = QPointF(arc_start.x() + x_sign * r * ARC_KAPPA, arc_start.y())
+            ctrl_2 = QPointF(arc_end.x(), arc_end.y() - y_sign * r * ARC_KAPPA)
+        path.cubicTo(ctrl_1, ctrl_2, arc_end)
 
         path.lineTo(end)
 
