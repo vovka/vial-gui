@@ -21,18 +21,17 @@ class ComboDrawingContext:
         palette = QApplication.palette()
 
         fill_color = QColor(palette.color(QPalette.Highlight))
-        fill_color.setAlpha(40)
+        fill_color.setAlpha(50)
         border_color = QColor(palette.color(QPalette.Highlight))
-        border_color.setAlpha(90)
-        line_color = QColor(palette.color(QPalette.ButtonText))
-        line_color.setAlpha(100)
+        border_color.setAlpha(120)
+
+        line_color = QColor(128, 128, 128)
         text_color = QColor(palette.color(QPalette.ButtonText))
-        text_color.setAlpha(160)
 
         self.line_pen = QPen(line_color)
-        self.line_pen.setWidthF(1.5)
+        self.line_pen.setWidthF(1.0)
         self.border_pen = QPen(border_color)
-        self.border_pen.setWidthF(1.0)
+        self.border_pen.setWidthF(1.5)
         self.fill_brush = QBrush(fill_color)
         self.text_pen = QPen(text_color)
 
@@ -63,8 +62,7 @@ class ComboDrawingContext:
 
     def _draw_combo(self, combo, renderer):
         """Draw a single combo visualization."""
-        if not combo.adjacent:
-            self._draw_lines(combo, renderer)
+        self._draw_lines(combo, renderer)
         self._draw_label_box(combo)
         self._draw_label_text(combo)
 

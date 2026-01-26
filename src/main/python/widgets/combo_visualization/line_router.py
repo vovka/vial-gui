@@ -1,92 +1,100 @@
-"""Curved line routing for combo visualization."""
+"""Arc-style dendron routing for combo visualization.
+
+Implements L-shaped paths with rounded corners, similar to keymap-drawer.
+"""
 
 import math
 
-from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtGui import QPainterPath
 
-from widgets.combo_visualization.geometry import ComboGeometry
-
-MIN_CURVE_DISTANCE_FACTOR = 2
-CURVE_PERPENDICULAR_FACTOR = 0.15
-OBSTACLE_MARGIN_FACTOR = 0.3
+ARC_RADIUS = 6.0
+KEY_PADDING = 4.0
 
 
 class ComboLineRouter:
-    """Routes curved lines between labels and keys, avoiding obstacles."""
+    """Routes arc-style dendrons between combo labels and keys."""
 
     def __init__(self, obstacles, avg_size):
         self.obstacles = obstacles
         self.avg_size = avg_size
+        self.arc_radius = min(ARC_RADIUS, avg_size * 0.15)
 
-    def create_path(self, start, end, combo_key_rects):
-        """Create a curved path from start to end avoiding obstacles."""
+    def create_path(self, start, end, combo_key_rects, x_first=None):
+        """Create an L-shaped arc path from start to end."""
         path = QPainterPath()
         path.moveTo(start)
 
-        blocking = self._find_blocking_rects(start, end, combo_key_rects)
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
 
-        if not blocking:
-            self._add_simple_curve(path, start, end)
+        if x_first is None:
+            x_first = abs(dy) > abs(dx)
+
+        if abs(dx) < 1 and abs(dy) < 1:
             return path
 
-        self._add_routed_curve(path, start, end, blocking)
+        if abs(dx) < self.arc_radius * 2 or abs(dy) < self.arc_radius * 2:
+            path.lineTo(end)
+            return path
+
+        self._draw_arc_dendron(path, start, end, x_first)
         return path
 
-    def _find_blocking_rects(self, start, end, combo_key_rects):
-        """Find rectangles that block the direct path."""
-        blocking = []
-        for rect in self.obstacles:
-            if rect in combo_key_rects:
-                continue
-            if ComboGeometry.line_crosses_rect(start, end, rect):
-                blocking.append(rect)
-        blocking.sort(key=lambda r: math.hypot(r.center().x() - start.x(), r.center().y() - start.y()))
-        return blocking
+    def _draw_arc_dendron(self, path, start, end, x_first):
+        """Draw an L-shaped path with rounded corner."""
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        r = self.arc_radius
 
-    def _add_simple_curve(self, path, start, end):
-        """Add a simple curve or line when no obstacles."""
-        dx, dy = end.x() - start.x(), end.y() - start.y()
-        dist = math.hypot(dx, dy)
-
-        if dist > self.avg_size * MIN_CURVE_DISTANCE_FACTOR:
-            mid_x, mid_y = (start.x() + end.x()) / 2, (start.y() + end.y()) / 2
-            perp_x = -dy / dist * self.avg_size * CURVE_PERPENDICULAR_FACTOR
-            perp_y = dx / dist * self.avg_size * CURVE_PERPENDICULAR_FACTOR
-            path.quadTo(QPointF(mid_x + perp_x, mid_y + perp_y), end)
+        if x_first:
+            corner = QPointF(end.x(), start.y())
+            self._add_horizontal_then_vertical(path, start, corner, end, dx, dy, r)
         else:
-            path.lineTo(end)
+            corner = QPointF(start.x(), end.y())
+            self._add_vertical_then_horizontal(path, start, corner, end, dx, dy, r)
 
-    def _add_routed_curve(self, path, start, end, blocking):
-        """Add a curve that routes around blocking rectangles."""
-        current = start
-        for rect in blocking:
-            waypoint = self._compute_waypoint(current, end, rect)
-            self._add_cubic_segment(path, current, waypoint)
-            current = waypoint
-        self._add_final_segment(path, current, end)
+    def _add_horizontal_then_vertical(self, path, start, corner, end, dx, dy, r):
+        """Draw horizontal line, arc, then vertical line."""
+        x_dir = 1 if dx > 0 else -1
+        y_dir = 1 if dy > 0 else -1
 
-    def _compute_waypoint(self, current, end, rect):
-        """Compute a waypoint to route around a rectangle."""
-        dx, dy = end.x() - current.x(), end.y() - current.y()
-        rect_center = rect.center()
-        cross = dx * (rect_center.y() - current.y()) - dy * (rect_center.x() - current.x())
-        margin = self.avg_size * OBSTACLE_MARGIN_FACTOR
+        arc_start_x = corner.x() - x_dir * r
+        arc_end_y = corner.y() + y_dir * r
 
-        if abs(dy) > abs(dx):
-            y = rect.top() - margin if cross > 0 else rect.bottom() + margin
-            return QPointF(rect_center.x(), y)
-        x = rect.left() - margin if cross > 0 else rect.right() + margin
-        return QPointF(x, rect_center.y())
+        path.lineTo(arc_start_x, start.y())
 
-    def _add_cubic_segment(self, path, start, end):
-        """Add a cubic bezier segment."""
-        ctrl1 = QPointF((start.x() + end.x()) / 2, start.y())
-        ctrl2 = QPointF(end.x(), (start.y() + end.y()) / 2)
-        path.cubicTo(ctrl1, ctrl2, end)
+        arc_rect = self._get_arc_rect(corner, x_dir, y_dir, r)
+        start_angle = 90 if y_dir < 0 else 270
+        sweep = -90 * x_dir * y_dir
 
-    def _add_final_segment(self, path, current, end):
-        """Add the final segment to the destination."""
-        ctrl1 = QPointF(current.x(), (current.y() + end.y()) / 2)
-        ctrl2 = QPointF((current.x() + end.x()) / 2, end.y())
-        path.cubicTo(ctrl1, ctrl2, end)
+        path.arcTo(arc_rect, start_angle, sweep)
+        path.lineTo(end)
+
+    def _add_vertical_then_horizontal(self, path, start, corner, end, dx, dy, r):
+        """Draw vertical line, arc, then horizontal line."""
+        x_dir = 1 if dx > 0 else -1
+        y_dir = 1 if dy > 0 else -1
+
+        arc_start_y = corner.y() - y_dir * r
+        arc_end_x = corner.x() + x_dir * r
+
+        path.lineTo(start.x(), arc_start_y)
+
+        arc_rect = self._get_arc_rect(corner, x_dir, y_dir, r)
+        start_angle = 180 if x_dir > 0 else 0
+        sweep = 90 * x_dir * y_dir
+
+        path.arcTo(arc_rect, start_angle, sweep)
+        path.lineTo(end)
+
+    def _get_arc_rect(self, corner, x_dir, y_dir, r):
+        """Get the bounding rect for the arc."""
+        if x_dir > 0 and y_dir > 0:
+            return QRectF(corner.x() - r, corner.y(), r * 2, r * 2)
+        elif x_dir > 0 and y_dir < 0:
+            return QRectF(corner.x() - r, corner.y() - r * 2, r * 2, r * 2)
+        elif x_dir < 0 and y_dir > 0:
+            return QRectF(corner.x() - r, corner.y(), r * 2, r * 2)
+        else:
+            return QRectF(corner.x() - r, corner.y() - r * 2, r * 2, r * 2)

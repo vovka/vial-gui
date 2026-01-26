@@ -33,6 +33,7 @@ class ComboRenderer:
             combo.compute_geometry()
             combo_info = self._build_combo_info(combo)
             combo.rect = placer.find_best_position(combo_info)
+            combo.compute_alignment()
 
         return combos_data
 
@@ -60,6 +61,7 @@ class ComboRenderer:
         }
 
     def create_line_path(self, combo, start, end):
-        """Create a curved line path for a combo."""
+        """Create an arc dendron path for a combo."""
         router = ComboLineRouter(self.key_rects, combo.avg_size)
-        return router.create_path(start, end, combo.key_rects)
+        x_first = combo.alignment in ('top', 'bottom')
+        return router.create_path(start, end, combo.key_rects, x_first)

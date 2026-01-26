@@ -17,6 +17,7 @@ class ComboData:
         self.avg_size = 0
         self.adjacent = False
         self.rect = None
+        self.alignment = 'top'
 
     def compute_geometry(self, adjacency_threshold_ratio=1.7):
         """Compute bounding box, centers, and adjacency."""
@@ -31,6 +32,24 @@ class ComboData:
         threshold = self.avg_size * adjacency_threshold_ratio
         analyzer = ComboLayoutAnalyzer([])
         self.adjacent = analyzer.are_keys_adjacent(self.centers, threshold)
+
+    def compute_alignment(self):
+        """Determine alignment based on label position relative to keys."""
+        if self.rect is None or self.bbox is None:
+            return
+        label_center = self.rect.center()
+        bbox_center = self.bbox.center()
+
+        if self.rect.bottom() < self.bbox.top():
+            self.alignment = 'top'
+        elif self.rect.top() > self.bbox.bottom():
+            self.alignment = 'bottom'
+        elif self.rect.right() < self.bbox.left():
+            self.alignment = 'left'
+        elif self.rect.left() > self.bbox.right():
+            self.alignment = 'right'
+        else:
+            self.alignment = 'center'
 
     @property
     def center(self):
