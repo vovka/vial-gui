@@ -5,6 +5,7 @@ from PyQt5.QtGui import QColor, QPen, QBrush, QFontMetrics, QPainter, QPalette
 from PyQt5.QtWidgets import QApplication
 
 from constants import KEY_ROUNDNESS
+from widgets.combo_visualization.geometry import ComboGeometry
 
 
 class ComboDrawingContext:
@@ -30,6 +31,8 @@ class ComboDrawingContext:
 
         self.line_pen = QPen(line_color)
         self.line_pen.setWidthF(1.0)
+        self.line_pen.setCapStyle(Qt.RoundCap)
+        self.line_pen.setJoinStyle(Qt.RoundJoin)
         self.border_pen = QPen(border_color)
         self.border_pen.setWidthF(1.5)
         self.fill_brush = QBrush(fill_color)
@@ -69,10 +72,13 @@ class ComboDrawingContext:
     def _draw_lines(self, combo, renderer):
         """Draw connecting lines from label to keys."""
         self.qp.setPen(self.line_pen)
-        start = self._get_dendron_start(combo)
+        self.qp.setBrush(Qt.NoBrush)
+        base_start = self._get_dendron_start(combo)
         for widget in combo.widgets:
-            key_center = widget.polygon.boundingRect().center()
-            path = renderer.create_line_path(combo, start, key_center)
+            key_rect = widget.polygon.boundingRect()
+            start = self._offset_dendron_start(combo, key_rect, base_start)
+            key_anchor = ComboGeometry.closest_rect_corner(start, key_rect)
+            path = renderer.create_line_path(combo, start, key_anchor)
             self.qp.drawPath(path)
 
     def _get_dendron_start(self, combo):
@@ -87,6 +93,22 @@ class ComboDrawingContext:
         elif combo.alignment == 'right':
             return QPointF(rect.left(), rect.center().y())
         return rect.center()
+
+    def _offset_dendron_start(self, combo, key_rect, base_start):
+        """Offset the dendron start along the label edge for smoother fan-out."""
+        rect = combo.rect
+        key_center = key_rect.center()
+        if combo.alignment in ('top', 'bottom'):
+            max_offset = rect.width() * 0.35
+            delta = key_center.x() - rect.center().x()
+            offset = max(-max_offset, min(delta, max_offset))
+            return QPointF(base_start.x() + offset, base_start.y())
+        if combo.alignment in ('left', 'right'):
+            max_offset = rect.height() * 0.35
+            delta = key_center.y() - rect.center().y()
+            offset = max(-max_offset, min(delta, max_offset))
+            return QPointF(base_start.x(), base_start.y() + offset)
+        return base_start
 
     def _draw_label_box(self, combo):
         """Draw the label background box."""
