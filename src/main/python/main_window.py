@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
         next_subtab_act.triggered.connect(lambda: self._step_subtab(1))
 
         zoom_in_act = QAction(tr("MenuNavigation", "Zoom in"), self)
-        zoom_in_act.setShortcut(QKeySequence.ZoomIn)
+        zoom_in_act.setShortcut(QKeySequence("Ctrl+="))
         zoom_in_act.setShortcutContext(Qt.WindowShortcut)
         zoom_in_act.triggered.connect(self.zoom_in)
 
@@ -245,6 +245,16 @@ class MainWindow(QMainWindow):
         zoom_out_act.setShortcut(QKeySequence.ZoomOut)
         zoom_out_act.setShortcutContext(Qt.WindowShortcut)
         zoom_out_act.triggered.connect(self.zoom_out)
+
+        keymap_zoom_in_act = QAction(tr("MenuNavigation", "Keymap zoom in"), self)
+        keymap_zoom_in_act.setShortcut(QKeySequence("Alt+="))
+        keymap_zoom_in_act.setShortcutContext(Qt.WindowShortcut)
+        keymap_zoom_in_act.triggered.connect(self.keymap_editor.zoom_in)
+
+        keymap_zoom_out_act = QAction(tr("MenuNavigation", "Keymap zoom out"), self)
+        keymap_zoom_out_act.setShortcut(QKeySequence("Alt+-"))
+        keymap_zoom_out_act.setShortcutContext(Qt.WindowShortcut)
+        keymap_zoom_out_act.triggered.connect(self.keymap_editor.zoom_out)
 
         navigation_menu = self.menuBar().addMenu(tr("Menu", "Navigation"))
         navigation_menu.addAction(prev_tab_act)
@@ -272,6 +282,9 @@ class MainWindow(QMainWindow):
         navigation_menu.addSeparator()
         navigation_menu.addAction(zoom_in_act)
         navigation_menu.addAction(zoom_out_act)
+        navigation_menu.addSeparator()
+        navigation_menu.addAction(keymap_zoom_in_act)
+        navigation_menu.addAction(keymap_zoom_out_act)
 
         view_menu = self.menuBar().addMenu(tr("Menu", "View"))
         self.combos_preview_act = QAction(tr("MenuView", "Combos"), self)
