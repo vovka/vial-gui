@@ -63,5 +63,4 @@ class ComboRenderer:
     def create_line_path(self, combo, start, end):
         """Create an arc dendron path for a combo."""
         router = ComboLineRouter(self.key_rects, combo.avg_size)
-        x_first = combo.alignment in ('top', 'bottom')
-        return router.create_path(start, end, combo.key_rects, x_first)
+        return router.create_path(start, end, combo.key_rects, combo.alignment)
