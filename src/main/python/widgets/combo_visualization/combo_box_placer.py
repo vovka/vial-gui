@@ -1,9 +1,12 @@
 """Calculates combo box placement relative to trigger keys."""
 
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from .point import Point
+
+if TYPE_CHECKING:
+    from .combo_data import KeyInfo
 
 
 class Alignment(Enum):
@@ -117,7 +120,7 @@ class ComboBoxPlacer:
         corner_y = key_center.y - half if dy > 0 else key_center.y + half
         return Point(corner_x, corner_y)
 
-    def group_keys_by_row(self, keys: list, threshold_ratio: float = 0.5) -> List[List]:
+    def group_keys_by_row(self, keys: List['KeyInfo'], threshold_ratio: float = 0.5) -> List[List['KeyInfo']]:
         """Group keys that are in similar horizontal rows."""
         if not keys:
             return []

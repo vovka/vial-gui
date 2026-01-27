@@ -100,14 +100,13 @@ class ComboRenderer:
         # Group keys by row for tree-structured dendrons
         groups = self.placer.group_keys_by_row(keys_to_draw)
 
-        # Build row_groups list: (row_y, corners, centers) for each row
+        # Build row_groups list: (row_y, corners) for each row
         row_groups = []
         for group in groups:
             corners = [self.placer.get_closest_corner(p.position, k.center, k.size) for k in group]
-            centers = [k.center for k in group]
             # Use average corner y for the row level
             row_y = sum(c.y for c in corners) / len(corners)
-            row_groups.append((row_y, corners, centers))
+            row_groups.append((row_y, corners))
 
         # Sort by row_y to draw from combo downward
         row_groups.sort(key=lambda x: x[0])

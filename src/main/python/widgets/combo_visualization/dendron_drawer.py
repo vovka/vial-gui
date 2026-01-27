@@ -87,7 +87,7 @@ class DendronDrawer:
     def draw_tree_dendron(self, start: Point, row_groups: list) -> QPainterPath:
         """Draw tree-structured dendron with vertical trunk and horizontal branches.
 
-        row_groups is a list of (row_y, corners, centers) tuples sorted by y.
+        row_groups is a list of (row_y, corners) tuples sorted by y.
         Each row has branches that curve to their key corners.
         """
         if not row_groups:
@@ -97,45 +97,16 @@ class DendronDrawer:
         path.moveTo(start.x, start.y)
         trunk_x = start.x
 
-        for row_y, corners, centers in row_groups:
+        for row_y, corners in row_groups:
             # Draw vertical line down to this row
             path.lineTo(trunk_x, row_y)
 
             # Draw horizontal branches for each key in this row
-            corners_with_centers = sorted(zip(corners, centers), key=lambda x: x[0].x)
-            for corner, center in corners_with_centers:
+            for corner in sorted(corners, key=lambda c: c.x):
                 path.moveTo(trunk_x, row_y)
                 self._draw_curved_branch(path, trunk_x, row_y, corner)
             # Return to trunk for next row
             path.moveTo(trunk_x, row_y)
-
-        return path
-
-    def draw_grouped_dendron(self, start: Point, key_corners: list,
-                             key_centers: list) -> QPainterPath:
-        """Draw dendron with shared path that splits with curves to multiple keys.
-
-        This draws from start point down to the row, then branches horizontally
-        to each key corner with a curved ending.
-        """
-        if not key_corners:
-            return QPainterPath()
-
-        path = QPainterPath()
-        path.moveTo(start.x, start.y)
-
-        # Determine the y-level where we branch (average of key corners y)
-        branch_y = sum(c.y for c in key_corners) / len(key_corners)
-
-        # Draw vertical line to the branching point
-        path.lineTo(start.x, branch_y)
-
-        # Sort corners by x to draw branches left to right
-        corners_with_centers = sorted(zip(key_corners, key_centers), key=lambda x: x[0].x)
-
-        for corner, center in corners_with_centers:
-            path.moveTo(start.x, branch_y)
-            self._draw_curved_branch(path, start.x, branch_y, corner)
 
         return path
 
@@ -144,7 +115,6 @@ class DendronDrawer:
         """Draw horizontal branch with curved ending to key corner."""
         r = self.arc_radius
         dx = corner.x - trunk_x
-        dy = corner.y - trunk_y
 
         if abs(dx) < r * 2:
             # Too close horizontally, just draw a curved line
