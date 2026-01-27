@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QWidget, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import (
+    QVBoxLayout, QPushButton, QWidget, QHBoxLayout, QLabel, QCheckBox
+)
 from PyQt5.QtCore import Qt, QTimer
 
 import math
 
 from editor.basic_editor import BasicEditor
+from editor.key_fade_manager import KeyFadeManager
 from protocol.constants import VIAL_PROTOCOL_MATRIX_TESTER
 from widgets.keyboard_widget import KeyboardWidget
 from util import tr
@@ -24,6 +27,13 @@ class MatrixTest(BasicEditor):
 
         self.unlock_btn = QPushButton("Unlock")
         self.reset_btn = QPushButton("Reset")
+        self.fade_checkbox = QCheckBox(tr("MatrixTest", "Fade effect"))
+        self.fade_checkbox.setToolTip(
+            tr("MatrixTest", "When enabled, key highlights fade out after release")
+        )
+
+        self.fade_manager = KeyFadeManager(fade_duration=2.0)
+        self.previous_pressed = {}
 
         layout = QVBoxLayout()
         layout.addWidget(self.keyboardWidget)
@@ -37,6 +47,7 @@ class MatrixTest(BasicEditor):
         btn_layout.addWidget(self.unlock_lbl)
         btn_layout.addWidget(self.unlock_btn)
         btn_layout.addWidget(self.reset_btn)
+        btn_layout.addWidget(self.fade_checkbox)
         self.addLayout(btn_layout)
 
         self.keyboard = None
@@ -66,10 +77,12 @@ class MatrixTest(BasicEditor):
                ((self.device.keyboard.cols // 8 + 1) * self.device.keyboard.rows <= 28)
 
     def reset_keyboard_widget(self):
-        # reset keyboard widget
+        self.fade_manager.reset()
+        self.previous_pressed.clear()
         for w in self.keyboardWidget.widgets:
             w.setPressed(False)
             w.setOn(False)
+            w.setHighlightIntensity(0.0)
 
         self.keyboardWidget.update_layout()
         self.keyboardWidget.update()
@@ -128,16 +141,27 @@ class MatrixTest(BasicEditor):
                 matrix[row][col] = (row_data[col_byte] >> col_mod) & 1
 
         # write matrix state to keyboard widget
+        fade_enabled = self.fade_checkbox.isChecked()
         for w in self.keyboardWidget.widgets:
             if w.desc.row is not None and w.desc.col is not None:
                 row = w.desc.row
                 col = w.desc.col
 
                 if row < len(matrix) and col < len(matrix[row]):
-                    w.setPressed(matrix[row][col])
-                    if matrix[row][col]:
-                        w.setOn(True)
+                    is_pressed = matrix[row][col]
+                    was_pressed = self.previous_pressed.get(w, False)
+                    w.setPressed(is_pressed)
 
+                    if is_pressed:
+                        w.setOn(True)
+                        w.setHighlightIntensity(1.0)
+                        self.fade_manager.stop_fade(w)
+                    elif fade_enabled and was_pressed and not is_pressed:
+                        self.fade_manager.start_fade(w)
+
+                    self.previous_pressed[w] = is_pressed
+
+        self.fade_manager.update()
         self.keyboardWidget.update_layout()
         self.keyboardWidget.update()
         self.keyboardWidget.updateGeometry()
