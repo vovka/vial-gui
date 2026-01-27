@@ -15,30 +15,26 @@ class KeyFadeManager:
         key.setHighlightIntensity(1.0)
 
     def stop_fade(self, key):
-        """Stop fading a key and reset its intensity."""
-        if key in self._fading_keys:
-            del self._fading_keys[key]
-        key.setHighlightIntensity(0.0)
+        """Stop fading a key."""
+        self._fading_keys.pop(key, None)
 
     def update(self):
         """Update all fading keys. Returns True if any key is still fading."""
         current_time = time.time()
-        keys_to_remove = []
+        next_fading_keys = {}
 
         for key, start_time in self._fading_keys.items():
             elapsed = current_time - start_time
-            if elapsed >= self.fade_duration:
-                key.setHighlightIntensity(0.0)
-                key.setOn(False)
-                keys_to_remove.append(key)
-            else:
+            if elapsed < self.fade_duration:
                 intensity = 1.0 - (elapsed / self.fade_duration)
                 key.setHighlightIntensity(intensity)
+                next_fading_keys[key] = start_time
+            else:
+                key.setHighlightIntensity(0.0)
+                key.setOn(False)
 
-        for key in keys_to_remove:
-            del self._fading_keys[key]
-
-        return len(self._fading_keys) > 0
+        self._fading_keys = next_fading_keys
+        return bool(self._fading_keys)
 
     def reset(self):
         """Reset all fading keys."""

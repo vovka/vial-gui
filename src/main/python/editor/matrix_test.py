@@ -162,9 +162,7 @@ class MatrixTest(BasicEditor):
                     self.previous_pressed[w] = is_pressed
 
         self.fade_manager.update()
-        self.keyboardWidget.update_layout()
         self.keyboardWidget.update()
-        self.keyboardWidget.updateGeometry()
 
     def unlock(self):
         Unlocker.unlock(self.keyboard)
