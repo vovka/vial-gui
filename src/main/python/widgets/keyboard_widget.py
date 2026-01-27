@@ -12,6 +12,7 @@ from constants import KEY_SIZE_RATIO, KEY_SPACING_RATIO, KEYBOARD_WIDGET_PADDING
 from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
+from widgets.dendron_renderer import DendronRenderer
 
 
 class KeyWidget:
@@ -594,9 +595,13 @@ class KeyboardWidget(QWidget):
 
             if not adjacent:
                 qp.setPen(line_pen)
+                qp.setBrush(Qt.NoBrush)
+                renderer = DendronRenderer(bend_radius=avg_size * 0.15)
                 for widget in combo_widgets:
-                    key_center = widget.polygon.boundingRect().center()
-                    qp.drawLine(rect_center, key_center)
+                    key_rect = widget.polygon.boundingRect()
+                    key_corner = renderer.find_closest_corner(key_rect, rect_center)
+                    path = renderer.create_dendron_path(rect_center, key_corner, key_rect)
+                    qp.drawPath(path)
 
             qp.setPen(border_pen)
             qp.setBrush(fill_brush)
