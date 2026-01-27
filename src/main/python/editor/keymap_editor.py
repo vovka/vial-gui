@@ -93,6 +93,9 @@ class KeymapEditor(BasicEditor):
     def set_combos_preview_enabled(self, enabled):
         self.container.set_show_combos(enabled)
 
+    def set_alt_combos_viz_enabled(self, enabled):
+        self.container.set_use_alt_combos_viz(enabled)
+
     def activate(self):
         for action in self.layer_actions:
             action.setEnabled(True)
