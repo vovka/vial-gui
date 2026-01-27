@@ -14,6 +14,15 @@ from util import KeycodeDisplay
 from themes import Theme
 
 
+def _interpolate_color(color1, color2, factor):
+    """Interpolate between two QColors based on factor (0.0 to 1.0)."""
+    return QColor(
+        round(color1.red() + (color2.red() - color1.red()) * factor),
+        round(color1.green() + (color2.green() - color1.green()) * factor),
+        round(color1.blue() + (color2.blue() - color1.blue()) * factor),
+    )
+
+
 class KeyWidget:
 
     def __init__(self, desc, scale, shift_x=0, shift_y=0):
@@ -21,6 +30,7 @@ class KeyWidget:
         self.on = False
         self.masked = False
         self.pressed = False
+        self.highlight_intensity = 0.0
         self.desc = desc
         self.text = ""
         self.mask_text = ""
@@ -203,6 +213,9 @@ class KeyWidget:
 
     def setFontScale(self, scale):
         self.font_scale = scale
+
+    def setHighlightIntensity(self, intensity):
+        self.highlight_intensity = max(0.0, min(1.0, intensity))
 
     def __repr__(self):
         qualifiers = ["KeyboardWidget"]
@@ -398,6 +411,21 @@ class KeyboardWidget(QWidget):
         if self.show_combos != enabled:
             self.show_combos = enabled
             self.update()
+
+    def _get_key_brush(self, key, normal_brush, on_brush, pressed_brush):
+        """Get the appropriate brush for a key based on its state."""
+        if key.pressed:
+            return pressed_brush
+        if key.highlight_intensity > 0:
+            color = _interpolate_color(
+                normal_brush.color(), on_brush.color(), key.highlight_intensity
+            )
+            brush = QBrush(color)
+            brush.setStyle(Qt.SolidPattern)
+            return brush
+        if key.on:
+            return on_brush
+        return normal_brush
 
     def _collect_combo_widgets(self):
         if not self.combo_entries_numeric or not self.combo_widget_keycodes_numeric:
@@ -687,22 +715,18 @@ class KeyboardWidget(QWidget):
 
             # draw keycap background/drop-shadow
             qp.setPen(active_pen if active else Qt.NoPen)
-            brush = background_brush
-            if key.pressed:
-                brush = background_pressed_brush
-            elif key.on:
-                brush = background_on_brush
-            qp.setBrush(brush)
+            bg_brush = self._get_key_brush(
+                key, background_brush, background_on_brush, background_pressed_brush
+            )
+            qp.setBrush(bg_brush)
             qp.drawPath(key.background_draw_path)
 
             # draw keycap foreground
             qp.setPen(Qt.NoPen)
-            brush = foreground_brush
-            if key.pressed:
-                brush = foreground_pressed_brush
-            elif key.on:
-                brush = foreground_on_brush
-            qp.setBrush(brush)
+            fg_brush = self._get_key_brush(
+                key, foreground_brush, foreground_on_brush, foreground_pressed_brush
+            )
+            qp.setBrush(fg_brush)
             qp.drawPath(key.foreground_draw_path)
 
             # draw key text
