@@ -3,8 +3,8 @@
 
 import math
 from typing import List
-from PyQt5.QtCore import QPointF, QRectF
-from PyQt5.QtGui import QPainter, QPainterPath, QPen, Qt
+from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtGui import QPainter, QPainterPath, QPen
 
 
 class KeyConnector:
