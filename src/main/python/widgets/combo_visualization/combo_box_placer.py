@@ -104,3 +104,41 @@ class ComboBoxPlacer:
             return True
         distance = abs(key_pos - combo_pos)
         return distance >= key_size - 1
+
+    def get_closest_corner(self, combo_pos: Point, key_center: Point,
+                           key_size: float) -> Point:
+        """Get the corner of the key closest to the combo box position."""
+        half = key_size / 2
+        # Determine which corner is closest based on direction from combo to key
+        dx = key_center.x - combo_pos.x
+        dy = key_center.y - combo_pos.y
+        # Choose corner on the side facing the combo box
+        corner_x = key_center.x - half if dx > 0 else key_center.x + half
+        corner_y = key_center.y - half if dy > 0 else key_center.y + half
+        return Point(corner_x, corner_y)
+
+    def group_keys_by_row(self, keys: list, threshold_ratio: float = 0.5) -> List[List]:
+        """Group keys that are in similar horizontal rows."""
+        if not keys:
+            return []
+        avg_size = sum(k.size for k in keys) / len(keys)
+        threshold = avg_size * threshold_ratio
+
+        # Sort by y-coordinate
+        sorted_keys = sorted(keys, key=lambda k: k.center.y)
+        groups = []
+        current_group = [sorted_keys[0]]
+
+        for key in sorted_keys[1:]:
+            if abs(key.center.y - current_group[0].center.y) <= threshold:
+                current_group.append(key)
+            else:
+                groups.append(current_group)
+                current_group = [key]
+        groups.append(current_group)
+
+        # Sort each group by x-coordinate
+        for group in groups:
+            group.sort(key=lambda k: k.center.x)
+
+        return groups

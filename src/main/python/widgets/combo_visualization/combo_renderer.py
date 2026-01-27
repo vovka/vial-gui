@@ -82,15 +82,38 @@ class ComboRenderer:
         qp.drawLine(int(p.position.x), int(p.position.y + p.height / 2), int(trunk_x), int(trunk_start.y))
 
     def _draw_individual_dendrons(self, qp: QPainter, p: ComboPlacement):
-        """Draw individual dendron for each key."""
-        for key in p.keys:
-            if not self.placer.should_draw_dendron(p.alignment, p.position, key.center, key.size):
-                continue
-            off = self.placer.get_key_offset(p.alignment, key.size, p.position, key.center, p.width, p.height)
-            if p.alignment == Alignment.MID:
-                qp.drawPath(self.dendron_drawer.draw_line_dendron(p.position, key.center, off))
-            else:
-                qp.drawPath(self.dendron_drawer.draw_arc_dendron(p.position, key.center, True, off))
+        """Draw tree-structured dendrons connecting to key corners with curved endings."""
+        # Filter keys that should have dendrons drawn
+        keys_to_draw = [key for key in p.keys
+                        if self.placer.should_draw_dendron(p.alignment, p.position, key.center, key.size)]
+
+        if not keys_to_draw:
+            return
+
+        if p.alignment == Alignment.MID:
+            # Simple line dendrons for MID alignment
+            for key in keys_to_draw:
+                corner = self.placer.get_closest_corner(p.position, key.center, key.size)
+                qp.drawPath(self.dendron_drawer.draw_line_dendron(p.position, corner, 0))
+            return
+
+        # Group keys by row for tree-structured dendrons
+        groups = self.placer.group_keys_by_row(keys_to_draw)
+
+        # Build row_groups list: (row_y, corners, centers) for each row
+        row_groups = []
+        for group in groups:
+            corners = [self.placer.get_closest_corner(p.position, k.center, k.size) for k in group]
+            centers = [k.center for k in group]
+            # Use average corner y for the row level
+            row_y = sum(c.y for c in corners) / len(corners)
+            row_groups.append((row_y, corners, centers))
+
+        # Sort by row_y to draw from combo downward
+        row_groups.sort(key=lambda x: x[0])
+
+        # Draw tree dendron with all rows
+        qp.drawPath(self.dendron_drawer.draw_tree_dendron(p.position, row_groups))
 
     def _draw_box(self, qp: QPainter, p: ComboPlacement, colors: dict):
         """Draw the combo box rectangle."""
