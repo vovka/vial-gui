@@ -296,6 +296,13 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.combos_preview_act)
         self.keymap_editor.set_combos_preview_enabled(self.combos_preview_act.isChecked())
 
+        self.alt_combos_viz_act = QAction(tr("MenuView", "Alt Combos Style"), self)
+        self.alt_combos_viz_act.setCheckable(True)
+        self.alt_combos_viz_act.setChecked(self._load_alt_combos_viz())
+        self.alt_combos_viz_act.toggled.connect(self.set_alt_combos_viz)
+        view_menu.addAction(self.alt_combos_viz_act)
+        self.keymap_editor.set_alt_combos_viz_enabled(self.alt_combos_viz_act.isChecked())
+
         self.security_menu = self.menuBar().addMenu(tr("Menu", "Security"))
         self.security_menu.addAction(keyboard_unlock_act)
         self.security_menu.addAction(keyboard_lock_act)
@@ -522,6 +529,13 @@ class MainWindow(QMainWindow):
     def set_combos_preview(self, enabled):
         self.settings.setValue("view_combos", bool(enabled))
         self.keymap_editor.set_combos_preview_enabled(enabled)
+
+    def _load_alt_combos_viz(self):
+        return self.settings.value("alt_combos_viz", True, bool)
+
+    def set_alt_combos_viz(self, enabled):
+        self.settings.setValue("alt_combos_viz", bool(enabled))
+        self.keymap_editor.set_alt_combos_viz_enabled(enabled)
 
     def _apply_ui_zoom(self, zoom, persist=True):
         zoom = max(0.1, float(zoom))

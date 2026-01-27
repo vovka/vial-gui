@@ -13,6 +13,7 @@ from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
+from widgets.alt_combos import AltCombosRenderer
 
 
 def _interpolate_color(color1, color2, factor):
@@ -303,6 +304,8 @@ class KeyboardWidget(QWidget):
         self.combo_entries_numeric = []
         self.combo_widget_keycodes_numeric = {}
         self.show_combos = True
+        self.use_alt_combos_viz = True
+        self.alt_combos_renderer = AltCombosRenderer()
 
     def set_keys(self, keys, encoders):
         self.common_widgets = []
@@ -411,6 +414,12 @@ class KeyboardWidget(QWidget):
         enabled = bool(enabled)
         if self.show_combos != enabled:
             self.show_combos = enabled
+            self.update()
+
+    def set_use_alt_combos_viz(self, enabled):
+        enabled = bool(enabled)
+        if self.use_alt_combos_viz != enabled:
+            self.use_alt_combos_viz = enabled
             self.update()
 
     def _get_key_brush(self, key, normal_brush, on_brush, pressed_brush):
@@ -654,6 +663,17 @@ class KeyboardWidget(QWidget):
 
         qp.restore()
 
+    def _draw_alt_combos(self, qp):
+        """Draw combos using alternative visualization with routed paths."""
+        combos = self._collect_combo_widgets()
+        if not combos:
+            return
+
+        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
+        avg_size = sum(w.size for w in self.widgets) / max(1, len(self.widgets))
+
+        self.alt_combos_renderer.render(qp, combos, key_rects, self.scale, avg_size)
+
     def paintEvent(self, event):
         qp = QPainter()
         qp.begin(self)
@@ -819,7 +839,10 @@ class KeyboardWidget(QWidget):
             qp.restore()
 
         if self.show_combos:
-            self._draw_combos(qp)
+            if self.use_alt_combos_viz:
+                self._draw_alt_combos(qp)
+            else:
+                self._draw_combos(qp)
 
         qp.end()
 
