@@ -599,8 +599,8 @@ class KeyboardWidget(QWidget):
                 renderer = DendronRenderer(bend_radius=avg_size * 0.15)
                 for widget in combo_widgets:
                     key_rect = widget.polygon.boundingRect()
-                    key_corner = renderer.find_closest_corner(key_rect, rect_center)
-                    path = renderer.create_dendron_path(rect_center, key_corner, key_rect)
+                    key_point = renderer.find_closest_corner_point(key_rect, rect_center)
+                    path = renderer.create_dendron_path(rect_center, key_point, key_rect)
                     qp.drawPath(path)
 
             qp.setPen(border_pen)

@@ -9,15 +9,20 @@ class DendronRenderer:
     def __init__(self, bend_radius=12.0):
         self.bend_radius = bend_radius
 
-    def find_closest_corner(self, rect, point):
-        """Find the corner of rect closest to point."""
+    def find_closest_corner_point(self, rect, point):
+        """Find point inside rect near closest corner, along diagonal."""
         corners = [
             QPointF(rect.left(), rect.top()),
             QPointF(rect.right(), rect.top()),
             QPointF(rect.left(), rect.bottom()),
             QPointF(rect.right(), rect.bottom()),
         ]
-        return min(corners, key=lambda c: self._distance(c, point))
+        corner = min(corners, key=lambda c: self._distance(c, point))
+        center = rect.center()
+        dx = center.x() - corner.x()
+        dy = center.y() - corner.y()
+        inset_ratio = 0.2
+        return QPointF(corner.x() + dx * inset_ratio, corner.y() + dy * inset_ratio)
 
     def create_dendron_path(self, start, end_corner, key_rect):
         """Create a path from start to end_corner with a curly hook bend."""
