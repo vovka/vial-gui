@@ -1,5 +1,4 @@
 from collections import defaultdict
-import math
 import re
 
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QTransform, QBrush, QPolygonF, QPalette, QPen, QFontMetrics
@@ -12,6 +11,7 @@ from constants import KEY_SIZE_RATIO, KEY_SPACING_RATIO, KEYBOARD_WIDGET_PADDING
 from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
+from widgets.combo_visualization import ComboRenderer, ComboData, ComboDrawingContext
 
 
 def _interpolate_color(color1, color2, factor):
@@ -458,196 +458,20 @@ class KeyboardWidget(QWidget):
         return combos
 
     def _draw_combos(self, qp):
+        """Draw combo visualization overlays on the keyboard."""
         combos = self._collect_combo_widgets()
         if not combos:
             return
 
-        palette = QApplication.palette()
-        fill_color = QColor(palette.color(QPalette.Highlight))
-        fill_color.setAlpha(40)
-        border_color = QColor(palette.color(QPalette.Highlight))
-        border_color.setAlpha(90)
-        line_color = QColor(palette.color(QPalette.ButtonText))
-        line_color.setAlpha(80)
+        canvas_w = self.width / self.scale if self.scale else self.width
+        canvas_h = self.height / self.scale if self.scale else self.height
 
-        line_pen = QPen(line_color)
-        line_pen.setWidthF(1.0)
-        border_pen = QPen(border_color)
-        border_pen.setWidthF(1.0)
-        fill_brush = QBrush(fill_color)
+        renderer = ComboRenderer(self.widgets, canvas_w, canvas_h, self.padding)
+        combos_data = [ComboData(w, out, lbl) for w, out, lbl in combos]
+        combos_data = renderer.compute_placements(combos_data)
 
-        text_color = QColor(palette.color(QPalette.ButtonText))
-        text_color.setAlpha(160)
-        text_pen = QPen(text_color)
-        text_font = QApplication.font()
-        base_size = text_font.pointSizeF()
-        if base_size <= 0:
-            base_size = float(text_font.pointSize())
-        text_font.setPointSizeF(max(1.0, base_size * 0.7))
-        name_font = QApplication.font()
-        name_font.setPointSizeF(max(1.0, base_size * 0.6))
-        name_metrics = QFontMetrics(name_font)
-        label_metrics = QFontMetrics(text_font)
-
-        qp.save()
-        qp.scale(self.scale, self.scale)
-        qp.setRenderHint(QPainter.Antialiasing)
-
-        placed_rects = []
-        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
-        canvas_width = self.width / self.scale if self.scale else self.width
-        canvas_height = self.height / self.scale if self.scale else self.height
-
-        def clamp_rect(rect):
-            rect_x = max(self.padding, min(rect.x(), canvas_width - rect.width() - self.padding))
-            rect_y = max(self.padding, min(rect.y(), canvas_height - rect.height() - self.padding))
-            return QRectF(rect_x, rect_y, rect.width(), rect.height())
-
-        def rect_overlaps(rect):
-            for key_rect in key_rects:
-                if rect.intersects(key_rect):
-                    return True
-            for placed in placed_rects:
-                if rect.intersects(placed):
-                    return True
-            return False
-
-        for combo_widgets, output_label, combo_label in combos:
-            bbox = combo_widgets[0].polygon.boundingRect()
-            size_total = 0
-            center_x = 0
-            center_y = 0
-            centers = []
-            for widget in combo_widgets:
-                widget_bbox = widget.polygon.boundingRect()
-                bbox = bbox.united(widget_bbox)
-                size_total += widget.size
-                center = widget_bbox.center()
-                center_x += center.x()
-                center_y += center.y()
-                centers.append(center)
-            avg_size = size_total / len(combo_widgets)
-            rect_w = max(avg_size * 0.5, avg_size * 0.45)
-            rect_h = max(avg_size * 0.4, avg_size * 0.35)
-            gap = avg_size * 0.2
-            text_padding = max(2.0, avg_size * 0.08)
-            label_lines = output_label.splitlines() if output_label else []
-            label_height = len(label_lines) * label_metrics.height()
-            name_height = name_metrics.height() if combo_label else 0
-            text_gap = max(1.0, name_metrics.height() * 0.15) if output_label else 0
-            needed_height = name_height + label_height + text_gap + (text_padding * 2)
-            if needed_height > rect_h:
-                rect_h = needed_height
-
-            center = QPointF(center_x / len(combo_widgets), center_y / len(combo_widgets))
-            adjacent = False
-            if len(centers) > 1:
-                threshold = avg_size * 1.7
-                visited = set([0])
-                stack = [0]
-                while stack:
-                    i = stack.pop()
-                    for j in range(len(centers)):
-                        if j in visited:
-                            continue
-                        dx = centers[i].x() - centers[j].x()
-                        dy = centers[i].y() - centers[j].y()
-                        if math.hypot(dx, dy) <= threshold:
-                            visited.add(j)
-                            stack.append(j)
-                adjacent = len(visited) == len(centers)
-            if adjacent:
-                rect_x = center.x() - rect_w / 2
-                rect_y = center.y() - rect_h / 2
-            else:
-                rect_x = bbox.center().x() - rect_w / 2
-                rect_y = bbox.top() - gap - rect_h
-                if rect_y < self.padding:
-                    rect_y = bbox.bottom() + gap
-
-            base_rect = QRectF(rect_x, rect_y, rect_w, rect_h)
-            base_rect = clamp_rect(base_rect)
-
-            rect = base_rect
-            if len(combo_widgets) >= 3:
-                step_x = rect_w + gap
-                step_y = rect_h + gap
-                candidates = []
-                if adjacent:
-                    candidates.extend([
-                        base_rect,
-                        QRectF(base_rect.x(), base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x(), base_rect.y() + step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y(), rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y(), rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y() + step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y() + step_y, rect_w, rect_h),
-                    ])
-                else:
-                    center_x = bbox.center().x() - rect_w / 2
-                    center_y = bbox.center().y() - rect_h / 2
-                    left_x = bbox.left() - gap - rect_w
-                    right_x = bbox.right() + gap
-                    above_y = bbox.top() - gap - rect_h
-                    below_y = bbox.bottom() + gap
-                    candidates.extend([
-                        QRectF(center_x, above_y, rect_w, rect_h),
-                        QRectF(center_x, below_y, rect_w, rect_h),
-                        QRectF(left_x, center_y, rect_w, rect_h),
-                        QRectF(right_x, center_y, rect_w, rect_h),
-                        QRectF(left_x, above_y, rect_w, rect_h),
-                        QRectF(right_x, above_y, rect_w, rect_h),
-                        QRectF(left_x, below_y, rect_w, rect_h),
-                        QRectF(right_x, below_y, rect_w, rect_h),
-                        QRectF(center_x, center_y, rect_w, rect_h),
-                    ])
-
-                rect = None
-                for candidate in candidates:
-                    candidate = clamp_rect(candidate)
-                    if not rect_overlaps(candidate):
-                        rect = candidate
-                        break
-                if rect is None:
-                    rect = base_rect
-                    attempts = 0
-                    while rect_overlaps(rect) and attempts < 6:
-                        rect = clamp_rect(QRectF(rect.x(), rect.y() + step_y, rect_w, rect_h))
-                        attempts += 1
-            placed_rects.append(rect)
-
-            rect_center = rect.center()
-
-            if not adjacent:
-                qp.setPen(line_pen)
-                for widget in combo_widgets:
-                    key_center = widget.polygon.boundingRect().center()
-                    qp.drawLine(rect_center, key_center)
-
-            qp.setPen(border_pen)
-            qp.setBrush(fill_brush)
-            corner = avg_size * KEY_ROUNDNESS
-            qp.drawRoundedRect(rect, corner, corner)
-
-            if combo_label:
-                qp.setPen(text_pen)
-                if output_label:
-                    total_height = name_height + label_height + text_gap
-                    start_y = rect.y() + (rect.height() - total_height) / 2
-                    name_rect = QRectF(rect.x(), start_y, rect.width(), name_height)
-                    label_rect = QRectF(rect.x(), start_y + name_height + text_gap,
-                                        rect.width(), label_height)
-                    qp.setFont(name_font)
-                    qp.drawText(name_rect, Qt.AlignHCenter | Qt.AlignVCenter, combo_label)
-                    qp.setFont(text_font)
-                    qp.drawText(label_rect, Qt.AlignHCenter | Qt.AlignVCenter, output_label)
-                else:
-                    qp.setFont(name_font)
-                    qp.drawText(rect, Qt.AlignCenter, combo_label)
-
-        qp.restore()
+        drawing_context = ComboDrawingContext(qp, self.scale)
+        drawing_context.draw_all(combos_data, renderer)
 
     def paintEvent(self, event):
         qp = QPainter()
