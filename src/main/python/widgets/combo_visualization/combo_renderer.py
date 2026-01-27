@@ -73,12 +73,18 @@ class ComboRenderer:
     def _draw_trunk_dendrons(self, qp: QPainter, p: ComboPlacement):
         """Draw trunk-and-branch style dendrons."""
         avg_size = sum(k.size for k in p.keys) / len(p.keys)
-        key_pts = [k.center for k in p.keys]
-        go_right = p.position.x < sum(pt.x for pt in key_pts) / len(key_pts)
+        key_centers = [k.center for k in p.keys]
+        go_right = p.position.x < sum(pt.x for pt in key_centers) / len(key_centers)
         offset = avg_size * 0.3
-        trunk_x = max(pt.x for pt in key_pts) + offset if go_right else min(pt.x for pt in key_pts) - offset
+        # Calculate key corner points (top-right if trunk on right, top-left if trunk on left)
+        key_corners = []
+        for k in p.keys:
+            corner_x = k.center.x + k.size / 2 if go_right else k.center.x - k.size / 2
+            corner_y = k.center.y - k.size / 2  # Top edge
+            key_corners.append(Point(corner_x, corner_y))
+        trunk_x = max(pt.x for pt in key_corners) + offset if go_right else min(pt.x for pt in key_corners) - offset
         trunk_start = Point(trunk_x, p.position.y + p.height / 2)
-        qp.drawPath(self.trunk_drawer.draw_trunk_with_branches(trunk_start, key_pts, offset, go_right))
+        qp.drawPath(self.trunk_drawer.draw_trunk_with_branches(trunk_start, key_corners, offset, go_right))
         qp.drawLine(int(p.position.x), int(p.position.y + p.height / 2), int(trunk_x), int(trunk_start.y))
 
     def _draw_individual_dendrons(self, qp: QPainter, p: ComboPlacement):
@@ -86,11 +92,26 @@ class ComboRenderer:
         for key in p.keys:
             if not self.placer.should_draw_dendron(p.alignment, p.position, key.center, key.size):
                 continue
-            off = self.placer.get_key_offset(p.alignment, key.size, p.position, key.center, p.width, p.height)
+            # Calculate target point at key edge based on alignment
+            target = self._get_key_edge_point(key, p.alignment)
+            off = self.placer.get_key_offset(p.alignment, key.size, p.position, target, p.width, p.height)
             if p.alignment == Alignment.MID:
                 qp.drawPath(self.dendron_drawer.draw_line_dendron(p.position, key.center, off))
             else:
-                qp.drawPath(self.dendron_drawer.draw_arc_dendron(p.position, key.center, True, off))
+                qp.drawPath(self.dendron_drawer.draw_arc_dendron(p.position, target, True, off))
+
+    def _get_key_edge_point(self, key, alignment: Alignment) -> Point:
+        """Get the point on key edge where dendron should connect."""
+        half = key.size / 2
+        if alignment == Alignment.TOP:
+            return Point(key.center.x, key.center.y - half)
+        elif alignment == Alignment.BOTTOM:
+            return Point(key.center.x, key.center.y + half)
+        elif alignment == Alignment.LEFT:
+            return Point(key.center.x - half, key.center.y)
+        elif alignment == Alignment.RIGHT:
+            return Point(key.center.x + half, key.center.y)
+        return key.center
 
     def _draw_box(self, qp: QPainter, p: ComboPlacement, colors: dict):
         """Draw the combo box rectangle."""

@@ -30,16 +30,20 @@ class TrunkDrawer:
 
     def _draw_branch(self, path: QPainterPath, trunk_x: float, y: float,
                      target_x: float, go_right: bool):
-        """Draw horizontal branch with curved corners."""
-        r = min(self.arc_radius, abs(trunk_x - target_x) * 0.2)
+        """Draw horizontal branch with curved corners ending in a curl."""
+        branch_length = abs(trunk_x - target_x)
+        r = min(self.arc_radius, branch_length * 0.3)
+        curl_r = min(self.arc_radius, branch_length * 0.2)
         if go_right:
-            # Trunk is on right, branch goes left to key
-            # Curve up from trunk, go horizontal left, curve down to key
+            # Trunk is on right, branch goes left to key corner
+            # Curve from trunk going up-left
             path.quadTo(trunk_x, y - r, trunk_x - r, y - r)
-            path.lineTo(target_x + r, y - r)
+            # Horizontal line toward key
+            path.lineTo(target_x + curl_r, y - r)
+            # Final curl down to key corner (y is the top edge of key)
             path.quadTo(target_x, y - r, target_x, y)
         else:
-            # Trunk is on left, branch goes right to key
+            # Trunk is on left, branch goes right to key corner
             path.quadTo(trunk_x, y - r, trunk_x + r, y - r)
-            path.lineTo(target_x - r, y - r)
+            path.lineTo(target_x - curl_r, y - r)
             path.quadTo(target_x, y - r, target_x, y)
