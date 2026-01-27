@@ -65,7 +65,7 @@ class PathRenderer:
         if needed_height > rect_h:
             rect_h = needed_height
 
-        offset = avg_size * 0.3
+        offset = avg_size * 0.6
         rect_x = slot.position.x() + slot.direction.x() * offset - rect_w / 2
         rect_y = slot.position.y() + slot.direction.y() * offset - rect_h / 2
 

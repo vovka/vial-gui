@@ -18,9 +18,35 @@ class Pathfinder:
         self, grid: RoutingGrid, start: Tuple[int, int], goal: Tuple[int, int]
     ) -> Tuple[Optional[List[Tuple[int, int]]], float]:
         """Find path from start to goal. Returns (path, cost) or (None, inf)."""
-        if grid.is_blocked(*start) or grid.is_blocked(*goal):
-            return self._direct_fallback(start, goal)
+        start = self._find_nearest_unblocked(grid, start)
+        goal = self._find_nearest_unblocked(grid, goal)
 
+        if start is None or goal is None:
+            return self._direct_fallback(start or (0, 0), goal or (0, 0))
+
+        return self._run_astar(grid, start, goal)
+
+    def _find_nearest_unblocked(
+        self, grid: RoutingGrid, pos: Tuple[int, int], max_radius: int = 20
+    ) -> Optional[Tuple[int, int]]:
+        """Find nearest unblocked cell using BFS spiral."""
+        if not grid.is_blocked(*pos):
+            return pos
+
+        for radius in range(1, max_radius + 1):
+            for dc in range(-radius, radius + 1):
+                for dr in range(-radius, radius + 1):
+                    if abs(dc) != radius and abs(dr) != radius:
+                        continue
+                    nc, nr = pos[0] + dc, pos[1] + dr
+                    if not grid.is_blocked(nc, nr):
+                        return (nc, nr)
+        return None
+
+    def _run_astar(
+        self, grid: RoutingGrid, start: Tuple[int, int], goal: Tuple[int, int]
+    ) -> Tuple[List[Tuple[int, int]], float]:
+        """Run A* search."""
         open_set = []
         for d in range(4):
             h = self._heuristic(start, goal)

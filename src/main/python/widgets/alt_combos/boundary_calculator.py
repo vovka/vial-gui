@@ -9,11 +9,11 @@ from .geometry import Slot
 class BoundaryCalculator:
     """Computes boundary rectangle and perimeter slots."""
 
-    def __init__(self, margin: float = 30.0):
-        self.margin = margin
+    def __init__(self, margin_ratio: float = 0.02):
+        self.margin_ratio = margin_ratio
 
     def compute_boundary(self, key_rects: List[QRectF]) -> QRectF:
-        """Compute outer boundary rectangle with margin."""
+        """Compute boundary rectangle with margin relative to size."""
         if not key_rects:
             return QRectF(0, 0, 100, 100)
 
@@ -21,11 +21,12 @@ class BoundaryCalculator:
         for rect in key_rects[1:]:
             bbox = bbox.united(rect)
 
+        margin = min(bbox.width(), bbox.height()) * self.margin_ratio
         return QRectF(
-            bbox.left() - self.margin,
-            bbox.top() - self.margin,
-            bbox.width() + 2 * self.margin,
-            bbox.height() + 2 * self.margin
+            bbox.left() + margin,
+            bbox.top() + margin,
+            bbox.width() - 2 * margin,
+            bbox.height() - 2 * margin
         )
 
     def compute_slots(self, boundary: QRectF, slot_count: int) -> List[Slot]:
