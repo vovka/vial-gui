@@ -21,7 +21,7 @@ class DendronRenderer:
         center = rect.center()
         dx = center.x() - corner.x()
         dy = center.y() - corner.y()
-        inset_ratio = 0.2
+        inset_ratio = 0.5
         return QPointF(corner.x() + dx * inset_ratio, corner.y() + dy * inset_ratio)
 
     def create_dendron_path(self, start, end_corner, key_rect):
