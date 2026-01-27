@@ -20,10 +20,10 @@ from .key_connector import KeyConnector
 class AltCombosRenderer:
     """Orchestrates the alternative combos visualization pipeline."""
 
-    def __init__(self, margin: float = 30.0, cell_size: float = 4.0):
-        self.boundary_calc = BoundaryCalculator(margin=margin)
+    def __init__(self, margin_ratio: float = 0.02, cell_size: float = 8.0):
+        self.boundary_calc = BoundaryCalculator(margin_ratio=margin_ratio)
         self.slot_assigner = SlotAssigner()
-        self.pathfinder = Pathfinder(bend_penalty=5.0)
+        self.pathfinder = Pathfinder(bend_penalty=3.0)
         self.simplifier = PathSimplifier()
         self.crossing_reducer = CrossingReducer()
         self.path_renderer = PathRenderer()
