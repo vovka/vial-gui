@@ -433,6 +433,68 @@ class KeyboardWidget(QWidget):
                     for w in self.widgets)
         return total / len(self.widgets)
 
+    def _gap_intersections(self, key_rects, avg_key_size):
+        if not key_rects or avg_key_size <= 0:
+            return []
+        threshold = avg_key_size * 1.5
+        vertical_lines = []
+        horizontal_lines = []
+        for i, rect1 in enumerate(key_rects):
+            for rect2 in key_rects[i + 1:]:
+                c1, c2 = rect1.center(), rect2.center()
+                dist = math.hypot(c1.x() - c2.x(), c1.y() - c2.y())
+                if dist > threshold:
+                    continue
+                dx = abs(c1.x() - c2.x())
+                dy = abs(c1.y() - c2.y())
+                if dx > dy:
+                    edge1 = rect1.right() if c1.x() < c2.x() else rect1.left()
+                    edge2 = rect2.left() if c1.x() < c2.x() else rect2.right()
+                    gap_x = (edge1 + edge2) / 2
+                    y_min = min(rect1.top(), rect2.top())
+                    y_max = max(rect1.bottom(), rect2.bottom())
+                    vertical_lines.append((gap_x, y_min, y_max))
+                else:
+                    edge1 = rect1.bottom() if c1.y() < c2.y() else rect1.top()
+                    edge2 = rect2.top() if c1.y() < c2.y() else rect2.bottom()
+                    gap_y = (edge1 + edge2) / 2
+                    x_min = min(rect1.left(), rect2.left())
+                    x_max = max(rect1.right(), rect2.right())
+                    horizontal_lines.append((gap_y, x_min, x_max))
+        intersections = []
+        seen = set()
+        for gap_x, y_min, y_max in vertical_lines:
+            for gap_y, x_min, x_max in horizontal_lines:
+                if x_min <= gap_x <= x_max and y_min <= gap_y <= y_max:
+                    point = QPointF(gap_x, gap_y)
+                    if any(rect.contains(point) for rect in key_rects):
+                        continue
+                    key = (round(point.x(), 1), round(point.y(), 1))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    intersections.append(point)
+        return intersections
+
+    def _draw_gap_intersections(self, painter):
+        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
+        avg_key_size = self._compute_avg_key_size()
+        intersections = self._gap_intersections(key_rects, avg_key_size)
+        if not intersections:
+            return
+        painter.save()
+        painter.scale(self.scale, self.scale)
+        painter.setRenderHint(QPainter.Antialiasing)
+        radius = max(1.5, avg_key_size * 0.05)
+        pen = QPen(QColor(120, 120, 120, 140))
+        pen.setWidthF(0.6)
+        brush = QBrush(QColor(160, 160, 160, 60))
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        for point in intersections:
+            painter.drawEllipse(point, radius, radius)
+        painter.restore()
+
     def _generate_free_slots(self):
         """Generate free slot positions based on current key layout."""
         if not self.widgets:
@@ -749,6 +811,7 @@ class KeyboardWidget(QWidget):
         # Draw free slots grid (debug-only, below keys)
         if self.show_combo_debug:
             self.slot_renderer.render(qp, self.free_slots, self.scale, self.canvas_bounds)
+            self._draw_gap_intersections(qp)
 
         for idx, key in enumerate(self.widgets):
             qp.save()
