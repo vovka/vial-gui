@@ -485,10 +485,10 @@ class KeyboardWidget(QWidget):
         painter.save()
         painter.scale(self.scale, self.scale)
         painter.setRenderHint(QPainter.Antialiasing)
-        radius = max(1.5, avg_key_size * 0.05)
-        pen = QPen(QColor(120, 120, 120, 140))
-        pen.setWidthF(0.6)
-        brush = QBrush(QColor(160, 160, 160, 60))
+        radius = max(2.5, avg_key_size * 0.08)
+        pen = QPen(QColor(120, 120, 120, 200))
+        pen.setWidthF(1.0)
+        brush = QBrush(QColor(160, 160, 160, 120))
         painter.setPen(pen)
         painter.setBrush(brush)
         for point in intersections:
@@ -811,7 +811,6 @@ class KeyboardWidget(QWidget):
         # Draw free slots grid (debug-only, below keys)
         if self.show_combo_debug:
             self.slot_renderer.render(qp, self.free_slots, self.scale, self.canvas_bounds)
-            self._draw_gap_intersections(qp)
 
         for idx, key in enumerate(self.widgets):
             qp.save()
@@ -934,6 +933,9 @@ class KeyboardWidget(QWidget):
 
         if self.show_combos:
             self._draw_combos(qp)
+
+        if self.show_combo_debug:
+            self._draw_gap_intersections(qp)
 
         qp.end()
 
