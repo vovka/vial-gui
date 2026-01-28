@@ -48,7 +48,7 @@ class ComboInfoBuilder:
         label_height = len(label_lines) * self.label_metrics.height()
         name_height = self.name_metrics.height() if combo_label else 0
         text_gap = max(1.0, self.name_metrics.height() * 0.15) if output_label else 0
-        needed = name_height + label_height + text_gap + (max(2.0, avg_size * 0.08) * 2)
+        needed = name_height + label_height + text_gap + (max(1.5, avg_size * 0.05) * 2)
         return max(rect_h, needed)
 
     def _is_adjacent(self, centers, avg_size):
