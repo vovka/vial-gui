@@ -769,12 +769,13 @@ class KeyboardWidget(QWidget):
             qp.setBrush(bg_brush)
             qp.drawPath(key.background_draw_path)
 
-            # draw key outline rectangle
-            qp.setPen(outline_pen)
-            qp.setBrush(Qt.NoBrush)
-            qp.drawRect(key.rect)
-            if key.has2:
-                qp.drawRect(key.rect2)
+            if self.show_combo_debug:
+                # draw key outline rectangle (debug layer)
+                qp.setPen(outline_pen)
+                qp.setBrush(Qt.NoBrush)
+                qp.drawRect(key.rect)
+                if key.has2:
+                    qp.drawRect(key.rect2)
 
             # draw keycap foreground
             qp.setPen(Qt.NoPen)
