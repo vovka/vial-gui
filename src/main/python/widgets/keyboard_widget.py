@@ -325,6 +325,7 @@ class KeyboardWidget(QWidget):
         self.widgets_for_layout = []
 
         self.add_keys([(x, KeyWidget) for x in keys] + [(x, EncoderWidget) for x in encoders])
+        self._invalidate_combo_cache()
         self.update_layout()
 
     def add_keys(self, keys):
@@ -437,7 +438,6 @@ class KeyboardWidget(QWidget):
         self.free_slots = self.slot_generator.generate_slots(
             self.widgets, self.canvas_bounds, edge_padding
         )
-        self._invalidate_combo_cache()
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
         self.combo_entries = combo_entries or []
