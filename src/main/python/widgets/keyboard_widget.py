@@ -313,6 +313,13 @@ class KeyboardWidget(QWidget):
         self.free_slots = []
         self.canvas_bounds = None
 
+        # Combo layout cache (computed once, reused on every paint)
+        self._combo_cache = None
+
+    def _invalidate_combo_cache(self):
+        """Invalidate cached combo layout data."""
+        self._combo_cache = None
+
     def set_keys(self, keys, encoders):
         self.common_widgets = []
         self.widgets_for_layout = []
@@ -430,6 +437,7 @@ class KeyboardWidget(QWidget):
         self.free_slots = self.slot_generator.generate_slots(
             self.widgets, self.canvas_bounds, edge_padding
         )
+        self._invalidate_combo_cache()
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
         self.combo_entries = combo_entries or []
@@ -452,6 +460,7 @@ class KeyboardWidget(QWidget):
         if widget_keycodes:
             for widget, code in widget_keycodes.items():
                 self.combo_widget_keycodes_numeric[widget] = Keycode.deserialize(code)
+        self._invalidate_combo_cache()
 
     def set_show_combos(self, enabled):
         enabled = bool(enabled)
@@ -512,9 +521,60 @@ class KeyboardWidget(QWidget):
                 combos.append((widgets, output_label, combo_label))
         return combos
 
-    def _draw_combos(self, qp):
+    def _compute_combo_cache(self):
+        """Compute and cache combo layout data (expensive, called once)."""
         combos = self._collect_combo_widgets()
         if not combos:
+            return []
+
+        text_font = QApplication.font()
+        base_size = text_font.pointSizeF()
+        if base_size <= 0:
+            base_size = float(text_font.pointSize())
+        text_font.setPointSizeF(max(1.0, base_size * 0.525))
+        name_font = QApplication.font()
+        name_font.setPointSizeF(max(1.0, base_size * 0.45))
+        name_metrics = QFontMetrics(name_font)
+        label_metrics = QFontMetrics(text_font)
+
+        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
+        canvas_width = self.width / self.scale if self.scale else self.width
+        canvas_height = self.height / self.scale if self.scale else self.height
+        canvas_bounds = QRectF(0, 0, canvas_width, canvas_height)
+
+        combo_infos = ComboInfoBuilder(label_metrics, name_metrics).build(combos)
+        avg_key_size = self._compute_avg_key_size()
+        assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
+        assignments = assigner.assign(combo_infos)
+
+        connector_router = ConnectorRouter(key_rects, avg_key_size)
+        path_renderer = ConnectorPathRenderer(corner_radius=avg_key_size * 0.15)
+
+        cache = []
+        for info in combo_infos:
+            assignment = assignments.get(info.index)
+            if not assignment:
+                continue
+            rect = assignment["rect"]
+            slot = assignment["slot"]
+            connector_paths = []
+            if not info.adjacent:
+                rect_center = rect.center()
+                for widget in info.combo_widgets:
+                    key_rect = widget.polygon.boundingRect()
+                    points = connector_router.route(rect_center, key_rect)
+                    connector_paths.append(path_renderer.create_path(points))
+            cache.append({
+                "rect": rect, "slot": slot, "connector_paths": connector_paths,
+                "output_label": info.output_label, "combo_label": info.combo_label,
+                "avg_size": info.avg_size, "adjacent": info.adjacent,
+            })
+        return cache
+
+    def _draw_combos(self, qp):
+        if self._combo_cache is None:
+            self._combo_cache = self._compute_combo_cache()
+        if not self._combo_cache:
             return
 
         palette = QApplication.palette()
@@ -534,13 +594,11 @@ class KeyboardWidget(QWidget):
                 pen.setWidthF(1.0)
         line_color = QColor(palette.color(QPalette.ButtonText))
         line_color.setAlpha(80)
-
         line_pen = QPen(line_color)
         line_pen.setWidthF(1.0)
         border_pen = QPen(border_color)
         border_pen.setWidthF(1.0)
         fill_brush = QBrush(fill_color)
-
         text_color = QColor(palette.color(QPalette.ButtonText))
         text_color.setAlpha(160)
         text_pen = QPen(text_color)
@@ -558,45 +616,21 @@ class KeyboardWidget(QWidget):
         qp.scale(self.scale, self.scale)
         qp.setRenderHint(QPainter.Antialiasing)
 
-        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
-        canvas_width = self.width / self.scale if self.scale else self.width
-        canvas_height = self.height / self.scale if self.scale else self.height
-        canvas_bounds = QRectF(0, 0, canvas_width, canvas_height)
-
-        combo_infos = ComboInfoBuilder(label_metrics, name_metrics).build(combos)
-        avg_key_size = self._compute_avg_key_size()
-        assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
-        assignments = assigner.assign(combo_infos)
-
-        connector_router = ConnectorRouter(key_rects, avg_key_size)
-        path_renderer = ConnectorPathRenderer(corner_radius=avg_key_size * 0.15)
-
-        for info in combo_infos:
-            assignment = assignments.get(info.index)
-            if not assignment:
-                continue
-            rect = assignment["rect"]
-            slot = assignment["slot"]
-            combo_widgets = info.combo_widgets
-            output_label = info.output_label
-            combo_label = info.combo_label
-            avg_size = info.avg_size
-            adjacent = info.adjacent
+        for item in self._combo_cache:
+            rect = item["rect"]
+            slot = item["slot"]
+            output_label = item["output_label"]
+            combo_label = item["combo_label"]
+            avg_size = item["avg_size"]
             label_lines = output_label.splitlines() if output_label else []
             label_height = len(label_lines) * label_metrics.height()
             name_height = name_metrics.height() if combo_label else 0
             text_gap = max(1.0, name_metrics.height() * 0.15) if output_label else 0
 
-            rect_center = rect.center()
-
-            if not adjacent:
+            for path in item["connector_paths"]:
                 qp.setPen(line_pen)
                 qp.setBrush(Qt.NoBrush)
-                for widget in combo_widgets:
-                    key_rect = widget.polygon.boundingRect()
-                    points = connector_router.route(rect_center, key_rect)
-                    path = path_renderer.create_path(points)
-                    qp.drawPath(path)
+                qp.drawPath(path)
 
             if region_border_pens:
                 qp.setPen(region_border_pens.get(slot.region_type, border_pen))
