@@ -700,6 +700,8 @@ class KeyboardWidget(QWidget):
         regular_pen = qp.pen()
         regular_pen.setColor(QApplication.palette().color(QPalette.ButtonText))
         qp.setPen(regular_pen)
+        outline_pen = QPen(QColor(140, 140, 140, 140))
+        outline_pen.setWidthF(0.8)
 
         background_brush = QBrush()
         background_brush.setColor(QApplication.palette().color(QPalette.Button))
@@ -766,6 +768,11 @@ class KeyboardWidget(QWidget):
             )
             qp.setBrush(bg_brush)
             qp.drawPath(key.background_draw_path)
+
+            # draw key outline rectangle
+            qp.setPen(outline_pen)
+            qp.setBrush(Qt.NoBrush)
+            qp.drawRect(key.polygon.boundingRect())
 
             # draw keycap foreground
             qp.setPen(Qt.NoPen)
