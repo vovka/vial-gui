@@ -49,10 +49,10 @@ def _rect_overlaps(rect, placed_rects):
 def _region_bonus(slot, info, avg_key_size):
     if info.adjacent:
         if slot.region_type == SlotRegionType.EXTERIOR:
-            return -avg_key_size * 0.3
+            return -avg_key_size * 0.6
         if slot.region_type == SlotRegionType.INTER_KEY:
-            return avg_key_size * 0.35
-        return avg_key_size * 0.15
+            return avg_key_size * 0.6
+        return avg_key_size * 0.3
     return 0.0
 
 
