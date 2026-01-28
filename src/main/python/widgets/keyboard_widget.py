@@ -1,6 +1,8 @@
 from collections import defaultdict
+import logging
 import math
 import re
+import time
 
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QTransform, QBrush, QPolygonF, QPalette, QPen, QFontMetrics
 from PyQt5.QtWidgets import QWidget, QToolTip, QApplication
@@ -15,6 +17,8 @@ from themes import Theme
 from widgets.combo_label_placement import ComboInfoBuilder, ComboSlotAssigner
 from widgets.free_slots_grid import SlotGenerator, SlotRenderer, SlotRegionType
 from widgets.connector_routing import ConnectorRouter, ConnectorPathRenderer
+
+logger = logging.getLogger("KeyboardWidget")
 
 
 def _interpolate_color(color1, color2, factor):
@@ -318,6 +322,10 @@ class KeyboardWidget(QWidget):
 
     def _invalidate_combo_cache(self):
         """Invalidate cached combo layout data."""
+        import traceback
+        logger.warning("CACHE INVALIDATED - stack trace:")
+        for line in traceback.format_stack()[-5:-1]:
+            logger.warning(line.strip())
         self._combo_cache = None
 
     def set_keys(self, keys, encoders):
@@ -382,6 +390,7 @@ class KeyboardWidget(QWidget):
 
     def update_layout(self):
         """ Updates self.widgets for the currently active layout """
+        logger.warning(f"update_layout called, scale={self.scale}")
 
         # determine widgets for current layout
         self.place_widgets()
@@ -523,8 +532,11 @@ class KeyboardWidget(QWidget):
 
     def _compute_combo_cache(self):
         """Compute and cache combo layout data (expensive, called once)."""
+        start_time = time.time()
+        logger.warning("_compute_combo_cache STARTED")
         combos = self._collect_combo_widgets()
         if not combos:
+            logger.warning("_compute_combo_cache: no combos, returning early")
             return []
 
         text_font = QApplication.font()
@@ -569,9 +581,13 @@ class KeyboardWidget(QWidget):
                 "output_label": info.output_label, "combo_label": info.combo_label,
                 "avg_size": info.avg_size, "adjacent": info.adjacent,
             })
+        elapsed = time.time() - start_time
+        logger.warning(f"_compute_combo_cache FINISHED in {elapsed:.3f}s, {len(cache)} items")
         return cache
 
     def _draw_combos(self, qp):
+        start_time = time.time()
+        cache_was_none = self._combo_cache is None
         if self._combo_cache is None:
             self._combo_cache = self._compute_combo_cache()
         if not self._combo_cache:
@@ -656,6 +672,8 @@ class KeyboardWidget(QWidget):
                     qp.setFont(name_font)
                     qp.drawText(rect, Qt.AlignCenter, combo_label)
 
+        elapsed = time.time() - start_time
+        logger.warning(f"_draw_combos FINISHED in {elapsed:.3f}s, cache_was_none={cache_was_none}")
         qp.restore()
 
     def paintEvent(self, event):
@@ -899,6 +917,7 @@ class KeyboardWidget(QWidget):
         self.enabled = val
 
     def set_scale(self, scale):
+        logger.warning(f"set_scale called: {self.scale} -> {scale}")
         self.scale = scale
 
     def get_scale(self):
