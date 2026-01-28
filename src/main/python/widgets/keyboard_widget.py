@@ -436,31 +436,30 @@ class KeyboardWidget(QWidget):
     def _gap_intersections(self, key_rects, avg_key_size):
         if not key_rects or avg_key_size <= 0:
             return []
-        threshold = avg_key_size * 1.5
         vertical_lines = []
         horizontal_lines = []
-        for i, rect1 in enumerate(key_rects):
-            for rect2 in key_rects[i + 1:]:
-                c1, c2 = rect1.center(), rect2.center()
-                dist = math.hypot(c1.x() - c2.x(), c1.y() - c2.y())
-                if dist > threshold:
-                    continue
-                dx = abs(c1.x() - c2.x())
-                dy = abs(c1.y() - c2.y())
-                if dx > dy:
-                    edge1 = rect1.right() if c1.x() < c2.x() else rect1.left()
-                    edge2 = rect2.left() if c1.x() < c2.x() else rect2.right()
-                    gap_x = (edge1 + edge2) / 2
-                    y_min = min(rect1.top(), rect2.top())
-                    y_max = max(rect1.bottom(), rect2.bottom())
-                    vertical_lines.append((gap_x, y_min, y_max))
-                else:
-                    edge1 = rect1.bottom() if c1.y() < c2.y() else rect1.top()
-                    edge2 = rect2.top() if c1.y() < c2.y() else rect2.bottom()
-                    gap_y = (edge1 + edge2) / 2
-                    x_min = min(rect1.left(), rect2.left())
-                    x_max = max(rect1.right(), rect2.right())
-                    horizontal_lines.append((gap_y, x_min, x_max))
+        row_groups = self._group_rects_by_row(key_rects, avg_key_size)
+        for row_rects in row_groups.values():
+            if len(row_rects) < 2:
+                continue
+            sorted_rects = sorted(row_rects, key=lambda r: r.left())
+            row_top = min(r.top() for r in row_rects)
+            row_bottom = max(r.bottom() for r in row_rects)
+            for i in range(len(sorted_rects) - 1):
+                r1, r2 = sorted_rects[i], sorted_rects[i + 1]
+                gap_x = (r1.right() + r2.left()) / 2
+                vertical_lines.append((gap_x, row_top, row_bottom))
+        column_groups = self._group_rects_by_column(key_rects, avg_key_size)
+        for column_rects in column_groups.values():
+            if len(column_rects) < 2:
+                continue
+            sorted_rects = sorted(column_rects, key=lambda r: r.top())
+            col_left = min(r.left() for r in column_rects)
+            col_right = max(r.right() for r in column_rects)
+            for i in range(len(sorted_rects) - 1):
+                r1, r2 = sorted_rects[i], sorted_rects[i + 1]
+                gap_y = (r1.bottom() + r2.top()) / 2
+                horizontal_lines.append((gap_y, col_left, col_right))
         intersections = []
         seen = set()
         for gap_x, y_min, y_max in vertical_lines:
@@ -475,6 +474,36 @@ class KeyboardWidget(QWidget):
                     seen.add(key)
                     intersections.append(point)
         return intersections
+
+    def _group_rects_by_row(self, key_rects, avg_key_size):
+        rows = {}
+        tolerance = avg_key_size * 0.3
+        for rect in key_rects:
+            cy = rect.center().y()
+            found = False
+            for row_y in rows:
+                if abs(row_y - cy) < tolerance:
+                    rows[row_y].append(rect)
+                    found = True
+                    break
+            if not found:
+                rows[cy] = [rect]
+        return rows
+
+    def _group_rects_by_column(self, key_rects, avg_key_size):
+        columns = {}
+        tolerance = avg_key_size * 0.3
+        for rect in key_rects:
+            cx = rect.center().x()
+            found = False
+            for col_x in columns:
+                if abs(col_x - cx) < tolerance:
+                    columns[col_x].append(rect)
+                    found = True
+                    break
+            if not found:
+                columns[cx] = [rect]
+        return columns
 
     def _draw_gap_intersections(self, painter):
         key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
