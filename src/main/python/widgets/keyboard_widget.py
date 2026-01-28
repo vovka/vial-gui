@@ -13,7 +13,8 @@ from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
-from widgets.free_slots_grid import Slot, SlotGenerator, SlotRenderer, SlotRegionType
+from widgets.combo_label_placement import ComboInfoBuilder, ComboSlotAssigner
+from widgets.free_slots_grid import SlotGenerator, SlotRenderer
 
 
 def _interpolate_color(color1, color2, factor):
@@ -502,195 +503,6 @@ class KeyboardWidget(QWidget):
                 combos.append((widgets, output_label, combo_label))
         return combos
 
-    def _combo_is_adjacent(self, centers, avg_size):
-        if len(centers) <= 1:
-            return False
-        threshold = avg_size * 1.7
-        visited = set([0])
-        stack = [0]
-        while stack:
-            i = stack.pop()
-            for j in range(len(centers)):
-                if j in visited:
-                    continue
-                dx = centers[i].x() - centers[j].x()
-                dy = centers[i].y() - centers[j].y()
-                if math.hypot(dx, dy) <= threshold:
-                    visited.add(j)
-                    stack.append(j)
-        return len(visited) == len(centers)
-
-    def _estimate_combo_rect_size(self, avg_size, output_label, combo_label, label_metrics, name_metrics):
-        rect_w = max(avg_size * 0.5, avg_size * 0.45)
-        rect_h = max(avg_size * 0.4, avg_size * 0.35)
-        text_padding = max(2.0, avg_size * 0.08)
-        label_lines = output_label.splitlines() if output_label else []
-        label_height = len(label_lines) * label_metrics.height()
-        name_height = name_metrics.height() if combo_label else 0
-        text_gap = max(1.0, name_metrics.height() * 0.15) if output_label else 0
-        needed_height = name_height + label_height + text_gap + (text_padding * 2)
-        if needed_height > rect_h:
-            rect_h = needed_height
-        return rect_w, rect_h
-
-    def _assign_combo_slots(self, combo_infos, key_rects, canvas_bounds, avg_key_size):
-        slots = list(self.free_slots or [])
-        padding = self.padding
-        placed_rects = []
-        used_slot_ids = set()
-        assignments = {}
-
-        def clamp_rect(rect):
-            rect_x = max(padding, min(rect.x(), canvas_bounds.width() - rect.width() - padding))
-            rect_y = max(padding, min(rect.y(), canvas_bounds.height() - rect.height() - padding))
-            return QRectF(rect_x, rect_y, rect.width(), rect.height())
-
-        def rect_overlaps(rect):
-            for placed in placed_rects:
-                if rect.intersects(placed):
-                    return True
-            return False
-
-        def rect_for_slot(slot, rect_w, rect_h):
-            rect = QRectF(slot.position.x() - rect_w / 2,
-                          slot.position.y() - rect_h / 2,
-                          rect_w, rect_h)
-            return clamp_rect(rect)
-
-        def key_overlap_penalty(rect):
-            if not key_rects:
-                return 0.0
-            overlap_area = 0.0
-            for key_rect in key_rects:
-                if rect.intersects(key_rect):
-                    overlap = rect.intersected(key_rect)
-                    overlap_area += overlap.width() * overlap.height()
-            if overlap_area <= 0:
-                return 0.0
-            rect_area = rect.width() * rect.height()
-            if rect_area <= 0:
-                return 0.0
-            return overlap_area / rect_area
-
-        def spacing_penalty(rect):
-            penalty = 0.0
-            for placed in placed_rects:
-                dx = rect.center().x() - placed.center().x()
-                dy = rect.center().y() - placed.center().y()
-                dist = math.hypot(dx, dy)
-                if dist < avg_key_size:
-                    penalty += (avg_key_size - dist) / avg_key_size
-            return penalty
-
-        def slot_cost(slot, rect, anchor, adjacent):
-            dx = rect.center().x() - anchor.x()
-            dy = rect.center().y() - anchor.y()
-            distance_cost = math.hypot(dx, dy)
-            overlap_cost = key_overlap_penalty(rect) * avg_key_size * 2.0
-            clearance_bonus = slot.clearance_score * 0.2
-            region_bonus = 0.0
-            if adjacent and slot.region_type == SlotRegionType.INTER_KEY:
-                region_bonus = avg_key_size * 0.3
-            elif not adjacent and slot.region_type == SlotRegionType.EXTERIOR:
-                region_bonus = -avg_key_size * 0.1
-            return distance_cost + overlap_cost - clearance_bonus - region_bonus + (spacing_penalty(rect) * avg_key_size)
-
-        def build_candidate_slots(info):
-            anchor = info["anchor"]
-            adjacent = info["adjacent"]
-            preferred = []
-            fallback = []
-            for slot in slots:
-                slot_dist = math.hypot(slot.position.x() - anchor.x(),
-                                       slot.position.y() - anchor.y())
-                entry = (slot_dist, slot)
-                if adjacent and slot.region_type == SlotRegionType.INTER_KEY:
-                    preferred.append(entry)
-                else:
-                    fallback.append(entry)
-            preferred.sort(key=lambda item: item[0])
-            fallback.sort(key=lambda item: item[0])
-            candidates = [slot for _, slot in preferred[:20]]
-            candidates.extend(slot for _, slot in fallback[:30])
-            if len(candidates) < 10:
-                candidates = [slot for _, slot in (preferred + fallback)]
-            return candidates
-
-        def generate_fallback_slots():
-            fallback_points = []
-            step = max(8.0, avg_key_size * 0.4)
-            for x in self._range_steps(padding, canvas_bounds.width() - padding, step):
-                fallback_points.append(QPointF(x, padding))
-                fallback_points.append(QPointF(x, canvas_bounds.height() - padding))
-            for y in self._range_steps(padding, canvas_bounds.height() - padding, step):
-                fallback_points.append(QPointF(padding, y))
-                fallback_points.append(QPointF(canvas_bounds.width() - padding, y))
-            return [Slot(point, SlotRegionType.EXTERIOR, 0.0) for point in fallback_points]
-
-        combo_order = sorted(combo_infos,
-                             key=lambda info: (-(info["rect_w"] * info["rect_h"]),
-                                               -len(info["combo_widgets"])))
-
-        for info in combo_order:
-            best = None
-            best_cost = None
-            candidates = build_candidate_slots(info)
-            for slot in candidates:
-                if id(slot) in used_slot_ids:
-                    continue
-                rect = rect_for_slot(slot, info["rect_w"], info["rect_h"])
-                if rect_overlaps(rect):
-                    continue
-                cost = slot_cost(slot, rect, info["anchor"], info["adjacent"])
-                if best_cost is None or cost < best_cost:
-                    best_cost = cost
-                    best = (slot, rect)
-
-            if best is None:
-                for slot in generate_fallback_slots():
-                    rect = rect_for_slot(slot, info["rect_w"], info["rect_h"])
-                    if rect_overlaps(rect):
-                        continue
-                    cost = slot_cost(slot, rect, info["anchor"], info["adjacent"])
-                    if best_cost is None or cost < best_cost:
-                        best_cost = cost
-                        best = (slot, rect)
-
-            if best is None:
-                spiral_step = max(4.0, avg_key_size * 0.2)
-                for radius in range(1, 8):
-                    offset = spiral_step * radius
-                    for dx, dy in [(-offset, 0), (offset, 0), (0, -offset), (0, offset),
-                                   (-offset, -offset), (offset, -offset),
-                                   (-offset, offset), (offset, offset)]:
-                        slot = Slot(QPointF(info["anchor"].x() + dx, info["anchor"].y() + dy),
-                                    SlotRegionType.INTERIOR, 0.0)
-                        rect = rect_for_slot(slot, info["rect_w"], info["rect_h"])
-                        if rect_overlaps(rect):
-                            continue
-                        best = (slot, rect)
-                        break
-                    if best is not None:
-                        break
-
-            if best is None:
-                continue
-
-            slot, rect = best
-            assignments[info["index"]] = {"slot": slot, "rect": rect}
-            used_slot_ids.add(id(slot))
-            placed_rects.append(rect)
-
-        return assignments
-
-    def _range_steps(self, start, end, step):
-        values = []
-        val = start
-        while val <= end:
-            values.append(val)
-            val += step
-        return values
-
     def _draw_combos(self, qp):
         combos = self._collect_combo_widgets()
         if not combos:
@@ -732,53 +544,21 @@ class KeyboardWidget(QWidget):
         canvas_height = self.height / self.scale if self.scale else self.height
         canvas_bounds = QRectF(0, 0, canvas_width, canvas_height)
 
-        combo_infos = []
-        for idx, (combo_widgets, output_label, combo_label) in enumerate(combos):
-            bbox = combo_widgets[0].polygon.boundingRect()
-            size_total = 0
-            center_x = 0
-            center_y = 0
-            centers = []
-            for widget in combo_widgets:
-                widget_bbox = widget.polygon.boundingRect()
-                bbox = bbox.united(widget_bbox)
-                size_total += widget.size
-                center = widget_bbox.center()
-                center_x += center.x()
-                center_y += center.y()
-                centers.append(center)
-            avg_size = size_total / len(combo_widgets)
-            rect_w, rect_h = self._estimate_combo_rect_size(
-                avg_size, output_label, combo_label, label_metrics, name_metrics
-            )
-            anchor = QPointF(center_x / len(combo_widgets), center_y / len(combo_widgets))
-            adjacent = self._combo_is_adjacent(centers, avg_size)
-            combo_infos.append({
-                "index": idx,
-                "combo_widgets": combo_widgets,
-                "output_label": output_label,
-                "combo_label": combo_label,
-                "rect_w": rect_w,
-                "rect_h": rect_h,
-                "avg_size": avg_size,
-                "bbox": bbox,
-                "anchor": anchor,
-                "adjacent": adjacent,
-            })
-
+        combo_infos = ComboInfoBuilder(label_metrics, name_metrics).build(combos)
         avg_key_size = self._compute_avg_key_size()
-        assignments = self._assign_combo_slots(combo_infos, key_rects, canvas_bounds, avg_key_size)
+        assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
+        assignments = assigner.assign(combo_infos)
 
         for info in combo_infos:
-            assignment = assignments.get(info["index"])
+            assignment = assignments.get(info.index)
             if not assignment:
                 continue
             rect = assignment["rect"]
-            combo_widgets = info["combo_widgets"]
-            output_label = info["output_label"]
-            combo_label = info["combo_label"]
-            avg_size = info["avg_size"]
-            adjacent = info["adjacent"]
+            combo_widgets = info.combo_widgets
+            output_label = info.output_label
+            combo_label = info.combo_label
+            avg_size = info.avg_size
+            adjacent = info.adjacent
             label_lines = output_label.splitlines() if output_label else []
             label_height = len(label_lines) * label_metrics.height()
             name_height = name_metrics.height() if combo_label else 0
