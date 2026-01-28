@@ -13,6 +13,7 @@ from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
+from widgets.free_slots_grid import SlotGenerator, SlotRenderer
 
 
 def _interpolate_color(color1, color2, factor):
@@ -304,6 +305,11 @@ class KeyboardWidget(QWidget):
         self.combo_widget_keycodes_numeric = {}
         self.show_combos = True
 
+        # Free slots grid
+        self.slot_generator = SlotGenerator()
+        self.slot_renderer = SlotRenderer()
+        self.free_slots = []
+
     def set_keys(self, keys, encoders):
         self.common_widgets = []
         self.widgets_for_layout = []
@@ -382,8 +388,21 @@ class KeyboardWidget(QWidget):
         self.width = round(max_w + 2 * self.padding)
         self.height = round(max_h + 2 * self.padding)
 
+        self._generate_free_slots()
+
         self.update()
         self.updateGeometry()
+
+    def _generate_free_slots(self):
+        """Generate free slot positions based on current key layout."""
+        if not self.widgets:
+            self.free_slots = []
+            return
+
+        canvas_bounds = QRectF(0, 0, self.width / self.scale, self.height / self.scale)
+        self.free_slots = self.slot_generator.generate_slots(
+            self.widgets, canvas_bounds, self.padding
+        )
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
         self.combo_entries = combo_entries or []
@@ -706,6 +725,9 @@ class KeyboardWidget(QWidget):
 
         mask_font = qp.font()
         mask_font.setPointSize(round(mask_font.pointSize() * 0.8))
+
+        # Draw free slots grid (always visible, below keys)
+        self.slot_renderer.render(qp, self.free_slots, self.scale)
 
         for idx, key in enumerate(self.widgets):
             qp.save()
