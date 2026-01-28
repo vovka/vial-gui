@@ -772,7 +772,9 @@ class KeyboardWidget(QWidget):
             # draw key outline rectangle
             qp.setPen(outline_pen)
             qp.setBrush(Qt.NoBrush)
-            qp.drawRect(key.polygon.boundingRect())
+            qp.drawRect(key.rect)
+            if key.has2:
+                qp.drawRect(key.rect2)
 
             # draw keycap foreground
             qp.setPen(Qt.NoPen)
