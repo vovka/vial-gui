@@ -389,10 +389,15 @@ class KeyboardWidget(QWidget):
         # Add extra padding for slot grid (space for 1 row of slots on each side)
         avg_key_size = self._compute_avg_key_size()
         slot_padding = avg_key_size * 0.8
-        total_padding = self.padding + slot_padding
 
-        self.width = round(max_w + 2 * total_padding)
-        self.height = round(max_h + 2 * total_padding)
+        # Shift all widgets by slot_padding to center keyboard in canvas
+        for widget in self.widgets:
+            widget.update_position(widget.scale,
+                                   widget.shift_x + slot_padding,
+                                   widget.shift_y + slot_padding)
+
+        self.width = round(max_w + 2 * (self.padding + slot_padding))
+        self.height = round(max_h + 2 * (self.padding + slot_padding))
 
         self._generate_free_slots()
 
