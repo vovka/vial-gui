@@ -46,12 +46,22 @@ def _rect_overlaps(rect, placed_rects):
     return any(rect.intersects(placed) for placed in placed_rects)
 
 
-def _region_bonus(slot, adjacent, avg_key_size):
-    if adjacent and slot.region_type == SlotRegionType.INTER_KEY:
-        return avg_key_size * 0.3
-    if not adjacent and slot.region_type == SlotRegionType.EXTERIOR:
-        return -avg_key_size * 0.1
+def _region_bonus(slot, info, avg_key_size):
+    if info.adjacent:
+        if slot.region_type == SlotRegionType.EXTERIOR:
+            return -avg_key_size * 0.3
+        if slot.region_type == SlotRegionType.INTER_KEY:
+            return avg_key_size * 0.35
+        return avg_key_size * 0.15
     return 0.0
+
+
+def _multi_key_penalty(slot, info, avg_key_size):
+    if len(info.combo_widgets) <= 2:
+        return 0.0
+    if slot.region_type == SlotRegionType.EXTERIOR:
+        return 0.0
+    return avg_key_size * 0.9
 
 
 def _key_overlap_penalty(rect, key_rects):
@@ -76,8 +86,9 @@ def _slot_cost(slot, rect, info, avg_key_size, key_rects, placed_rects):
     overlap_cost = _key_overlap_penalty(rect, key_rects) * avg_key_size * 2.0
     spacing_cost = _spacing_penalty(rect, placed_rects, avg_key_size) * avg_key_size
     clearance_bonus = slot.clearance_score * 0.2
-    region_bonus = _region_bonus(slot, info.adjacent, avg_key_size)
-    return distance_cost + overlap_cost + spacing_cost - clearance_bonus - region_bonus
+    region_bonus = _region_bonus(slot, info, avg_key_size)
+    multi_key_penalty = _multi_key_penalty(slot, info, avg_key_size)
+    return distance_cost + overlap_cost + spacing_cost + multi_key_penalty - clearance_bonus - region_bonus
 
 
 class ComboSlotAssigner:
