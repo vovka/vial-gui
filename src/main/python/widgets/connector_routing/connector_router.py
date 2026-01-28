@@ -60,6 +60,9 @@ class ConnectorRouter:
             self._normalize_path([start, corner2, end]),
         ]
         candidates.extend(self._routed_path_candidates(start, end))
+        zero_crossings = [path for path in candidates if self._path_cost(path, target_key_rect) == 0]
+        if zero_crossings:
+            return min(zero_crossings, key=lambda path: self._path_score(path, target_key_rect))
         best = min(candidates, key=lambda path: self._path_score(path, target_key_rect))
         return best
 
@@ -128,13 +131,14 @@ class ConnectorRouter:
 
     def _candidate_waypoints(self, start, end):
         wps = []
-        for wp in self.graph.find_nearest_waypoints(start, count=6):
-            wps.append(wp.position)
-        for wp in self.graph.find_nearest_waypoints(end, count=6):
-            wps.append(wp.position)
+        for wp in self.graph.find_nearest_waypoints(start, count=8):
+            wps.append(wp)
+        for wp in self.graph.find_nearest_waypoints(end, count=8):
+            wps.append(wp)
         seen = set()
         filtered = []
-        for pos in wps:
+        for wp in wps:
+            pos = wp.position
             key = (round(pos.x(), 2), round(pos.y(), 2))
             if key in seen:
                 continue
@@ -144,13 +148,16 @@ class ConnectorRouter:
 
     def _nearest_waypoint_to_key(self, key_rect):
         key_center = key_rect.center()
-        nearest = self.graph.find_nearest_waypoints(key_center, count=1)
-        if not nearest:
+        perimeter = self.graph.find_nearest_waypoints(key_center, count=6, kind="perimeter")
+        gap = self.graph.find_nearest_waypoints(key_center, count=6, kind="gap")
+        corridor = self.graph.find_nearest_waypoints(key_center, count=6, kind="corridor")
+        candidates = perimeter + gap + corridor
+        if not candidates:
             return None
-        waypoint = nearest[0].position
-        if key_rect.contains(waypoint):
-            return None
-        return waypoint
+        for wp in candidates:
+            if not key_rect.contains(wp.position):
+                return wp.position
+        return None
 
     def _nearest_waypoint_positions(self, point, max_count=4):
         return [wp.position for wp in self.graph.find_nearest_waypoints(point, count=max_count)]
