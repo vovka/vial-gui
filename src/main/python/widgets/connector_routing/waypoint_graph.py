@@ -168,9 +168,12 @@ class WaypointGraph:
                 return True
         return False
 
-    def find_nearest_waypoints(self, point, count=5):
+    def find_nearest_waypoints(self, point, count=5, kind=None):
         """Find the nearest waypoints to a given point."""
         if not self.waypoints:
             return []
-        sorted_wps = sorted(self.waypoints, key=lambda w: w.distance_to(point))
+        candidates = self.waypoints
+        if kind is not None:
+            candidates = [wp for wp in candidates if wp.waypoint_type == kind]
+        sorted_wps = sorted(candidates, key=lambda w: w.distance_to(point))
         return sorted_wps[:count]
