@@ -14,17 +14,19 @@ class ComboInfoBuilder:
         return [self._build_one(idx, *combo) for idx, combo in enumerate(combos)]
 
     def _build_one(self, index, combo_widgets, output_label, combo_label):
-        bbox, avg_size, centers, anchor = self._combo_stats(combo_widgets)
+        bbox, avg_size, centers, anchor, rects = self._combo_stats(combo_widgets)
         rect_w, rect_h = self._rect_size(avg_size, output_label, combo_label)
-        adjacent = self._is_adjacent(centers, avg_size)
+        touching_cluster = self._touching_cluster(rects)
+        adjacent = touching_cluster if len(rects) > 2 else self._is_adjacent(centers, avg_size)
         return ComboInfo(index, combo_widgets, output_label, combo_label,
-                         rect_w, rect_h, avg_size, bbox, anchor, adjacent)
+                         rect_w, rect_h, avg_size, bbox, anchor, adjacent, touching_cluster)
 
     def _combo_stats(self, combo_widgets):
         bbox = self._combo_bbox(combo_widgets)
-        centers = [w.polygon.boundingRect().center() for w in combo_widgets]
+        rects = [w.polygon.boundingRect() for w in combo_widgets]
+        centers = [rect.center() for rect in rects]
         avg_size = sum(w.size for w in combo_widgets) / len(combo_widgets)
-        return bbox, avg_size, centers, self._avg_point(centers)
+        return bbox, avg_size, centers, self._avg_point(centers), rects
 
     def _combo_bbox(self, combo_widgets):
         bbox = combo_widgets[0].polygon.boundingRect()
@@ -74,3 +76,25 @@ class ComboInfoBuilder:
             if math.hypot(dx, dy) <= threshold:
                 neighbors.append(j)
         return neighbors
+
+    def _touching_cluster(self, rects):
+        if len(rects) <= 1:
+            return False
+        visited, stack = {0}, [0]
+        while stack:
+            neighbors = self._touching_neighbors(rects, stack.pop(), visited)
+            visited.update(neighbors); stack.extend(neighbors)
+        return len(visited) == len(rects)
+
+    def _touching_neighbors(self, rects, index, visited):
+        neighbors = []
+        for j, rect in enumerate(rects):
+            if j in visited:
+                continue
+            if self._rects_touch(rects[index], rect):
+                neighbors.append(j)
+        return neighbors
+
+    def _rects_touch(self, rect_a, rect_b):
+        epsilon = 0.1
+        return rect_a.adjusted(-epsilon, -epsilon, epsilon, epsilon).intersects(rect_b)

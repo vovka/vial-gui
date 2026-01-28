@@ -2,7 +2,7 @@
 
 class ComboInfo:
     def __init__(self, index, combo_widgets, output_label, combo_label,
-                 rect_w, rect_h, avg_size, bbox, anchor, adjacent):
+                 rect_w, rect_h, avg_size, bbox, anchor, adjacent, touching_cluster):
         self.index = index
         self.combo_widgets = combo_widgets
         self.output_label = output_label
@@ -13,3 +13,4 @@ class ComboInfo:
         self.bbox = bbox
         self.anchor = anchor
         self.adjacent = adjacent
+        self.touching_cluster = touching_cluster

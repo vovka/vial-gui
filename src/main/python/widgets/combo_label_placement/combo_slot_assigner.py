@@ -27,7 +27,7 @@ def _split_slots(slots, info):
     preferred, fallback = [], []
     for slot in slots:
         entry = (_slot_distance(slot, info.anchor), slot)
-        if len(info.combo_widgets) > 2:
+        if len(info.combo_widgets) > 2 and not info.touching_cluster:
             (preferred if slot.region_type == SlotRegionType.EXTERIOR else fallback).append(entry)
         else:
             (preferred if info.adjacent and slot.region_type == SlotRegionType.INTER_KEY else fallback).append(entry)
@@ -60,7 +60,7 @@ def _region_bonus(slot, info, avg_key_size):
 
 
 def _multi_key_penalty(slot, info, avg_key_size):
-    if len(info.combo_widgets) <= 2:
+    if len(info.combo_widgets) <= 2 or info.touching_cluster:
         return 0.0
     if slot.region_type == SlotRegionType.EXTERIOR:
         return 0.0
