@@ -14,7 +14,7 @@ from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
 from widgets.combo_label_placement import ComboInfoBuilder, ComboSlotAssigner
-from widgets.free_slots_grid import SlotGenerator, SlotRenderer
+from widgets.free_slots_grid import SlotGenerator, SlotRenderer, SlotRegionType
 
 
 def _interpolate_color(color1, color2, factor):
@@ -513,6 +513,14 @@ class KeyboardWidget(QWidget):
         fill_color.setAlpha(40)
         border_color = QColor(palette.color(QPalette.Highlight))
         border_color.setAlpha(90)
+        region_border_pens = {
+            SlotRegionType.INTER_KEY: QPen(QColor(80, 200, 120, 180)),
+            SlotRegionType.INTERIOR: QPen(QColor(80, 160, 220, 180)),
+            SlotRegionType.EXTERIOR: QPen(QColor(220, 120, 80, 180)),
+            SlotRegionType.SPLIT_MIDDLE: QPen(QColor(180, 120, 220, 180)),
+        }
+        for pen in region_border_pens.values():
+            pen.setWidthF(1.0)
         line_color = QColor(palette.color(QPalette.ButtonText))
         line_color.setAlpha(80)
 
@@ -554,6 +562,7 @@ class KeyboardWidget(QWidget):
             if not assignment:
                 continue
             rect = assignment["rect"]
+            slot = assignment["slot"]
             combo_widgets = info.combo_widgets
             output_label = info.output_label
             combo_label = info.combo_label
@@ -576,7 +585,7 @@ class KeyboardWidget(QWidget):
                     path = renderer.create_dendron_path(rect_center, key_point, key_rect)
                     qp.drawPath(path)
 
-            qp.setPen(border_pen)
+            qp.setPen(region_border_pens.get(slot.region_type, border_pen))
             qp.setBrush(fill_brush)
             corner = avg_size * KEY_ROUNDNESS
             qp.drawRoundedRect(rect, corner, corner)
