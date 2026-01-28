@@ -82,13 +82,23 @@ def _spacing_penalty(rect, placed_rects, avg_key_size):
 
 
 def _slot_cost(slot, rect, info, avg_key_size, key_rects, placed_rects):
+    overlap_weight = _overlap_weight(slot, info)
     distance_cost = _slot_distance(slot, info.anchor)
-    overlap_cost = _key_overlap_penalty(rect, key_rects) * avg_key_size * 2.0
+    overlap_cost = _key_overlap_penalty(rect, key_rects) * avg_key_size * 2.0 * overlap_weight
     spacing_cost = _spacing_penalty(rect, placed_rects, avg_key_size) * avg_key_size
     clearance_bonus = slot.clearance_score * 0.2
     region_bonus = _region_bonus(slot, info, avg_key_size)
     multi_key_penalty = _multi_key_penalty(slot, info, avg_key_size)
     return distance_cost + overlap_cost + spacing_cost + multi_key_penalty - clearance_bonus - region_bonus
+
+
+def _overlap_weight(slot, info):
+    if info.adjacent:
+        if slot.region_type == SlotRegionType.INTER_KEY:
+            return 0.4
+        if slot.region_type == SlotRegionType.INTERIOR:
+            return 0.7
+    return 1.0
 
 
 class ComboSlotAssigner:
