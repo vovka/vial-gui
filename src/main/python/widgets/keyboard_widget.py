@@ -422,8 +422,11 @@ class KeyboardWidget(QWidget):
             return
 
         self.canvas_bounds = QRectF(0, 0, self.width / self.scale, self.height / self.scale)
+        # Use larger edge padding to leave room for combo labels at canvas edges
+        avg_key_size = self._compute_avg_key_size()
+        edge_padding = avg_key_size * 0.4  # Room for combo label bbox
         self.free_slots = self.slot_generator.generate_slots(
-            self.widgets, self.canvas_bounds, self.padding
+            self.widgets, self.canvas_bounds, edge_padding
         )
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
