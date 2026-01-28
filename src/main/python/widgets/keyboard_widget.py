@@ -379,13 +379,6 @@ class KeyboardWidget(QWidget):
 
         self.widgets.sort(key=lambda w: (w.y, w.x))
 
-        # determine maximum width and height of container
-        max_w = max_h = 0
-        for key in self.widgets:
-            p = key.polygon.boundingRect().bottomRight()
-            max_w = max(max_w, p.x() * self.scale)
-            max_h = max(max_h, p.y() * self.scale)
-
         # Add extra padding for slot grid (space for 1 row of slots on each side)
         avg_key_size = self._compute_avg_key_size()
         slot_padding = avg_key_size * 0.8
@@ -396,10 +389,17 @@ class KeyboardWidget(QWidget):
                                    widget.shift_x + slot_padding,
                                    widget.shift_y + slot_padding)
 
-        # max_w already includes self.padding offset, so for equal padding:
-        # left = self.padding + slot_padding, right = self.padding + slot_padding
-        self.width = round(max_w + self.padding + 2 * slot_padding)
-        self.height = round(max_h + self.padding + 2 * slot_padding)
+        # Calculate max dimensions AFTER shift, then add padding for right/bottom
+        max_w = max_h = 0
+        for key in self.widgets:
+            p = key.polygon.boundingRect().bottomRight()
+            max_w = max(max_w, p.x())
+            max_h = max(max_h, p.y())
+
+        # Add slot_padding for right/bottom (left/top already have it from shift)
+        total_padding = self.padding + slot_padding
+        self.width = round((max_w + total_padding) * self.scale)
+        self.height = round((max_h + total_padding) * self.scale)
 
         self._generate_free_slots()
 
