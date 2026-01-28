@@ -587,7 +587,7 @@ class KeyboardWidget(QWidget):
             if not info.adjacent:
                 for widget in info.combo_widgets:
                     key_rect = widget.polygon.boundingRect()
-                    points = connector_router.route(rect, key_rect)
+                    points = connector_router.route(rect.center(), key_rect)
                     connector_paths.append(path_renderer.create_path(points))
                     route_count += 1
             cache.append({

@@ -15,22 +15,21 @@ class ConnectorRouter:
         self.avg_key_size = avg_key_size
         self.graph = WaypointGraph(key_rects, avg_key_size)
 
-    def route(self, label_rect, key_rect):
-        """Find an orthogonal path from label rect to the key."""
-        label_point = self._find_label_connection_point(label_rect, key_rect.center())
-        key_point = self._find_key_connection_point(key_rect, label_point)
-        path = self._build_orthogonal_path(label_point, key_point, key_rect)
-        return path
+    def route(self, label_center, key_rect):
+        """Find an orthogonal path from label center to the key."""
+        key_waypoint = self._nearest_waypoint_to_key(key_rect)
+        key_anchor = key_waypoint if key_waypoint is not None else label_center
+        key_point = self._find_key_connection_point(key_rect, key_anchor)
+        if key_waypoint is not None:
+            path_to_gap = self._build_orthogonal_path(label_center, key_waypoint, key_rect)
+            path_from_gap = self._normalize_path([key_waypoint, key_point])
+            return self._normalize_path(path_to_gap[:-1] + path_from_gap)
+        return self._build_orthogonal_path(label_center, key_point, key_rect)
 
     def _find_key_connection_point(self, key_rect, from_point):
         """Find the closest point on the key edge to connect to."""
-        inset = min(key_rect.width(), key_rect.height()) * 0.2
+        inset = min(key_rect.width(), key_rect.height()) * 0.25
         return self._closest_edge_point(key_rect, from_point, inset)
-
-    def _find_label_connection_point(self, label_rect, toward_point):
-        """Find the closest point on the label edge to connect to."""
-        inset = min(label_rect.width(), label_rect.height()) * 0.15
-        return self._closest_edge_point(label_rect, toward_point, inset)
 
     def _closest_edge_point(self, rect, point, inset):
         """Find the closest point on rect edge, inset from corners."""
@@ -142,6 +141,16 @@ class ConnectorRouter:
             seen.add(key)
             filtered.append(pos)
         return filtered
+
+    def _nearest_waypoint_to_key(self, key_rect):
+        key_center = key_rect.center()
+        nearest = self.graph.find_nearest_waypoints(key_center, count=1)
+        if not nearest:
+            return None
+        waypoint = nearest[0].position
+        if key_rect.contains(waypoint):
+            return None
+        return waypoint
 
     def _nearest_waypoint_positions(self, point, max_count=4):
         return [wp.position for wp in self.graph.find_nearest_waypoints(point, count=max_count)]
