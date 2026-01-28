@@ -13,7 +13,8 @@ from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
-from widgets.free_slots_grid import SlotGenerator, SlotRenderer
+from widgets.combo_label_placement import ComboInfoBuilder, ComboSlotAssigner
+from widgets.free_slots_grid import SlotGenerator, SlotRenderer, SlotRegionType
 
 
 def _interpolate_color(color1, color2, factor):
@@ -304,6 +305,7 @@ class KeyboardWidget(QWidget):
         self.combo_entries_numeric = []
         self.combo_widget_keycodes_numeric = {}
         self.show_combos = True
+        self.show_combo_debug = False
 
         # Free slots grid
         self.slot_generator = SlotGenerator()
@@ -455,6 +457,14 @@ class KeyboardWidget(QWidget):
         enabled = bool(enabled)
         if self.show_combos != enabled:
             self.show_combos = enabled
+            if not enabled:
+                self.show_combo_debug = False
+            self.update()
+
+    def set_show_combo_debug(self, enabled):
+        enabled = bool(enabled)
+        if self.show_combo_debug != enabled:
+            self.show_combo_debug = enabled
             self.update()
 
     def _get_key_brush(self, key, normal_brush, on_brush, pressed_brush):
@@ -512,6 +522,16 @@ class KeyboardWidget(QWidget):
         fill_color.setAlpha(40)
         border_color = QColor(palette.color(QPalette.Highlight))
         border_color.setAlpha(90)
+        region_border_pens = None
+        if self.show_combo_debug:
+            region_border_pens = {
+                SlotRegionType.INTER_KEY: QPen(QColor(80, 200, 120, 180)),
+                SlotRegionType.INTERIOR: QPen(QColor(80, 160, 220, 180)),
+                SlotRegionType.EXTERIOR: QPen(QColor(220, 120, 80, 180)),
+                SlotRegionType.SPLIT_MIDDLE: QPen(QColor(180, 120, 220, 180)),
+            }
+            for pen in region_border_pens.values():
+                pen.setWidthF(1.0)
         line_color = QColor(palette.color(QPalette.ButtonText))
         line_color.setAlpha(80)
 
@@ -528,9 +548,9 @@ class KeyboardWidget(QWidget):
         base_size = text_font.pointSizeF()
         if base_size <= 0:
             base_size = float(text_font.pointSize())
-        text_font.setPointSizeF(max(1.0, base_size * 0.7))
+        text_font.setPointSizeF(max(1.0, base_size * 0.525))
         name_font = QApplication.font()
-        name_font.setPointSizeF(max(1.0, base_size * 0.6))
+        name_font.setPointSizeF(max(1.0, base_size * 0.45))
         name_metrics = QFontMetrics(name_font)
         label_metrics = QFontMetrics(text_font)
 
@@ -538,130 +558,31 @@ class KeyboardWidget(QWidget):
         qp.scale(self.scale, self.scale)
         qp.setRenderHint(QPainter.Antialiasing)
 
-        placed_rects = []
         key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
         canvas_width = self.width / self.scale if self.scale else self.width
         canvas_height = self.height / self.scale if self.scale else self.height
+        canvas_bounds = QRectF(0, 0, canvas_width, canvas_height)
 
-        def clamp_rect(rect):
-            rect_x = max(self.padding, min(rect.x(), canvas_width - rect.width() - self.padding))
-            rect_y = max(self.padding, min(rect.y(), canvas_height - rect.height() - self.padding))
-            return QRectF(rect_x, rect_y, rect.width(), rect.height())
+        combo_infos = ComboInfoBuilder(label_metrics, name_metrics).build(combos)
+        avg_key_size = self._compute_avg_key_size()
+        assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
+        assignments = assigner.assign(combo_infos)
 
-        def rect_overlaps(rect):
-            for key_rect in key_rects:
-                if rect.intersects(key_rect):
-                    return True
-            for placed in placed_rects:
-                if rect.intersects(placed):
-                    return True
-            return False
-
-        for combo_widgets, output_label, combo_label in combos:
-            bbox = combo_widgets[0].polygon.boundingRect()
-            size_total = 0
-            center_x = 0
-            center_y = 0
-            centers = []
-            for widget in combo_widgets:
-                widget_bbox = widget.polygon.boundingRect()
-                bbox = bbox.united(widget_bbox)
-                size_total += widget.size
-                center = widget_bbox.center()
-                center_x += center.x()
-                center_y += center.y()
-                centers.append(center)
-            avg_size = size_total / len(combo_widgets)
-            rect_w = max(avg_size * 0.5, avg_size * 0.45)
-            rect_h = max(avg_size * 0.4, avg_size * 0.35)
-            gap = avg_size * 0.2
-            text_padding = max(2.0, avg_size * 0.08)
+        for info in combo_infos:
+            assignment = assignments.get(info.index)
+            if not assignment:
+                continue
+            rect = assignment["rect"]
+            slot = assignment["slot"]
+            combo_widgets = info.combo_widgets
+            output_label = info.output_label
+            combo_label = info.combo_label
+            avg_size = info.avg_size
+            adjacent = info.adjacent
             label_lines = output_label.splitlines() if output_label else []
             label_height = len(label_lines) * label_metrics.height()
             name_height = name_metrics.height() if combo_label else 0
             text_gap = max(1.0, name_metrics.height() * 0.15) if output_label else 0
-            needed_height = name_height + label_height + text_gap + (text_padding * 2)
-            if needed_height > rect_h:
-                rect_h = needed_height
-
-            center = QPointF(center_x / len(combo_widgets), center_y / len(combo_widgets))
-            adjacent = False
-            if len(centers) > 1:
-                threshold = avg_size * 1.7
-                visited = set([0])
-                stack = [0]
-                while stack:
-                    i = stack.pop()
-                    for j in range(len(centers)):
-                        if j in visited:
-                            continue
-                        dx = centers[i].x() - centers[j].x()
-                        dy = centers[i].y() - centers[j].y()
-                        if math.hypot(dx, dy) <= threshold:
-                            visited.add(j)
-                            stack.append(j)
-                adjacent = len(visited) == len(centers)
-            if adjacent:
-                rect_x = center.x() - rect_w / 2
-                rect_y = center.y() - rect_h / 2
-            else:
-                rect_x = bbox.center().x() - rect_w / 2
-                rect_y = bbox.top() - gap - rect_h
-                if rect_y < self.padding:
-                    rect_y = bbox.bottom() + gap
-
-            base_rect = QRectF(rect_x, rect_y, rect_w, rect_h)
-            base_rect = clamp_rect(base_rect)
-
-            rect = base_rect
-            if len(combo_widgets) >= 3:
-                step_x = rect_w + gap
-                step_y = rect_h + gap
-                candidates = []
-                if adjacent:
-                    candidates.extend([
-                        base_rect,
-                        QRectF(base_rect.x(), base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x(), base_rect.y() + step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y(), rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y(), rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y() - step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() - step_x, base_rect.y() + step_y, rect_w, rect_h),
-                        QRectF(base_rect.x() + step_x, base_rect.y() + step_y, rect_w, rect_h),
-                    ])
-                else:
-                    center_x = bbox.center().x() - rect_w / 2
-                    center_y = bbox.center().y() - rect_h / 2
-                    left_x = bbox.left() - gap - rect_w
-                    right_x = bbox.right() + gap
-                    above_y = bbox.top() - gap - rect_h
-                    below_y = bbox.bottom() + gap
-                    candidates.extend([
-                        QRectF(center_x, above_y, rect_w, rect_h),
-                        QRectF(center_x, below_y, rect_w, rect_h),
-                        QRectF(left_x, center_y, rect_w, rect_h),
-                        QRectF(right_x, center_y, rect_w, rect_h),
-                        QRectF(left_x, above_y, rect_w, rect_h),
-                        QRectF(right_x, above_y, rect_w, rect_h),
-                        QRectF(left_x, below_y, rect_w, rect_h),
-                        QRectF(right_x, below_y, rect_w, rect_h),
-                        QRectF(center_x, center_y, rect_w, rect_h),
-                    ])
-
-                rect = None
-                for candidate in candidates:
-                    candidate = clamp_rect(candidate)
-                    if not rect_overlaps(candidate):
-                        rect = candidate
-                        break
-                if rect is None:
-                    rect = base_rect
-                    attempts = 0
-                    while rect_overlaps(rect) and attempts < 6:
-                        rect = clamp_rect(QRectF(rect.x(), rect.y() + step_y, rect_w, rect_h))
-                        attempts += 1
-            placed_rects.append(rect)
 
             rect_center = rect.center()
 
@@ -675,7 +596,10 @@ class KeyboardWidget(QWidget):
                     path = renderer.create_dendron_path(rect_center, key_point, key_rect)
                     qp.drawPath(path)
 
-            qp.setPen(border_pen)
+            if region_border_pens:
+                qp.setPen(region_border_pens.get(slot.region_type, border_pen))
+            else:
+                qp.setPen(border_pen)
             qp.setBrush(fill_brush)
             corner = avg_size * KEY_ROUNDNESS
             qp.drawRoundedRect(rect, corner, corner)
@@ -751,8 +675,9 @@ class KeyboardWidget(QWidget):
         mask_font = qp.font()
         mask_font.setPointSize(round(mask_font.pointSize() * 0.8))
 
-        # Draw free slots grid (always visible, below keys)
-        self.slot_renderer.render(qp, self.free_slots, self.scale, self.canvas_bounds)
+        # Draw free slots grid (debug-only, below keys)
+        if self.show_combo_debug:
+            self.slot_renderer.render(qp, self.free_slots, self.scale, self.canvas_bounds)
 
         for idx, key in enumerate(self.widgets):
             qp.save()
