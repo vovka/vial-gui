@@ -396,8 +396,10 @@ class KeyboardWidget(QWidget):
                                    widget.shift_x + slot_padding,
                                    widget.shift_y + slot_padding)
 
-        self.width = round(max_w + 2 * (self.padding + slot_padding))
-        self.height = round(max_h + 2 * (self.padding + slot_padding))
+        # max_w already includes self.padding offset, so for equal padding:
+        # left = self.padding + slot_padding, right = self.padding + slot_padding
+        self.width = round(max_w + self.padding + 2 * slot_padding)
+        self.height = round(max_h + self.padding + 2 * slot_padding)
 
         self._generate_free_slots()
 
