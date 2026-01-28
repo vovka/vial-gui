@@ -12,9 +12,9 @@ from constants import KEY_SIZE_RATIO, KEY_SPACING_RATIO, KEYBOARD_WIDGET_PADDING
 from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
-from widgets.dendron_renderer import DendronRenderer
 from widgets.combo_label_placement import ComboInfoBuilder, ComboSlotAssigner
 from widgets.free_slots_grid import SlotGenerator, SlotRenderer, SlotRegionType
+from widgets.connector_routing import ConnectorRouter, ConnectorPathRenderer
 
 
 def _interpolate_color(color1, color2, factor):
@@ -568,6 +568,9 @@ class KeyboardWidget(QWidget):
         assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
         assignments = assigner.assign(combo_infos)
 
+        connector_router = ConnectorRouter(key_rects, avg_key_size)
+        path_renderer = ConnectorPathRenderer(corner_radius=avg_key_size * 0.15)
+
         for info in combo_infos:
             assignment = assignments.get(info.index)
             if not assignment:
@@ -589,11 +592,10 @@ class KeyboardWidget(QWidget):
             if not adjacent:
                 qp.setPen(line_pen)
                 qp.setBrush(Qt.NoBrush)
-                renderer = DendronRenderer(bend_radius=avg_size * 0.15)
                 for widget in combo_widgets:
                     key_rect = widget.polygon.boundingRect()
-                    key_point = renderer.find_closest_corner_point(key_rect, rect_center)
-                    path = renderer.create_dendron_path(rect_center, key_point, key_rect)
+                    points = connector_router.route(rect_center, key_rect)
+                    path = path_renderer.create_path(points)
                     qp.drawPath(path)
 
             if region_border_pens:
