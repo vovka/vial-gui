@@ -386,13 +386,26 @@ class KeyboardWidget(QWidget):
             max_w = max(max_w, p.x() * self.scale)
             max_h = max(max_h, p.y() * self.scale)
 
-        self.width = round(max_w + 2 * self.padding)
-        self.height = round(max_h + 2 * self.padding)
+        # Add extra padding for slot grid (space for 1 row of slots on each side)
+        avg_key_size = self._compute_avg_key_size()
+        slot_padding = avg_key_size * 0.8
+        total_padding = self.padding + slot_padding
+
+        self.width = round(max_w + 2 * total_padding)
+        self.height = round(max_h + 2 * total_padding)
 
         self._generate_free_slots()
 
         self.update()
         self.updateGeometry()
+
+    def _compute_avg_key_size(self):
+        """Compute average key size for padding calculations."""
+        if not self.widgets:
+            return 50.0
+        total = sum(max(w.polygon.boundingRect().width(), w.polygon.boundingRect().height())
+                    for w in self.widgets)
+        return total / len(self.widgets)
 
     def _generate_free_slots(self):
         """Generate free slot positions based on current key layout."""
