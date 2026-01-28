@@ -27,7 +27,10 @@ def _split_slots(slots, info):
     preferred, fallback = [], []
     for slot in slots:
         entry = (_slot_distance(slot, info.anchor), slot)
-        (preferred if info.adjacent and slot.region_type == SlotRegionType.INTER_KEY else fallback).append(entry)
+        if len(info.combo_widgets) > 2:
+            (preferred if slot.region_type == SlotRegionType.EXTERIOR else fallback).append(entry)
+        else:
+            (preferred if info.adjacent and slot.region_type == SlotRegionType.INTER_KEY else fallback).append(entry)
     return _sort_entries(preferred), _sort_entries(fallback)
 
 
@@ -61,7 +64,7 @@ def _multi_key_penalty(slot, info, avg_key_size):
         return 0.0
     if slot.region_type == SlotRegionType.EXTERIOR:
         return 0.0
-    return avg_key_size * 0.9
+    return avg_key_size * 3.0
 
 
 def _key_overlap_penalty(rect, key_rects):
