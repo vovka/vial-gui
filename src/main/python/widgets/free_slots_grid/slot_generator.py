@@ -109,9 +109,8 @@ class SlotGenerator:
         return slots
 
     def _generate_exterior_slots(self, keyboard_bounds, canvas_bounds, padding, grid_spacing):
-        """Generate slots around keyboard perimeter."""
+        """Generate slots outside keyboard bounds but inside canvas."""
         slots = []
-        margin = grid_spacing
 
         for x in self._range_steps(canvas_bounds.left() + padding,
                                    canvas_bounds.right() - padding,
@@ -120,11 +119,10 @@ class SlotGenerator:
                                        canvas_bounds.bottom() - padding,
                                        grid_spacing):
                 point = QPointF(x, y)
-                if not keyboard_bounds.adjusted(-margin, -margin, margin, margin).contains(point):
-                    continue
                 if keyboard_bounds.contains(point):
                     continue
-                slots.append(Slot(point, SlotRegionType.EXTERIOR, margin))
+                clearance = self._distance_to_rect(point, keyboard_bounds)
+                slots.append(Slot(point, SlotRegionType.EXTERIOR, clearance))
 
         return slots
 
