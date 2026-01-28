@@ -529,9 +529,9 @@ class KeyboardWidget(QWidget):
         base_size = text_font.pointSizeF()
         if base_size <= 0:
             base_size = float(text_font.pointSize())
-        text_font.setPointSizeF(max(1.0, base_size * 0.7))
+        text_font.setPointSizeF(max(1.0, base_size * 0.525))
         name_font = QApplication.font()
-        name_font.setPointSizeF(max(1.0, base_size * 0.6))
+        name_font.setPointSizeF(max(1.0, base_size * 0.45))
         name_metrics = QFontMetrics(name_font)
         label_metrics = QFontMetrics(text_font)
 
