@@ -309,6 +309,7 @@ class KeyboardWidget(QWidget):
         self.slot_generator = SlotGenerator()
         self.slot_renderer = SlotRenderer()
         self.free_slots = []
+        self.canvas_bounds = None
 
     def set_keys(self, keys, encoders):
         self.common_widgets = []
@@ -397,11 +398,12 @@ class KeyboardWidget(QWidget):
         """Generate free slot positions based on current key layout."""
         if not self.widgets:
             self.free_slots = []
+            self.canvas_bounds = None
             return
 
-        canvas_bounds = QRectF(0, 0, self.width / self.scale, self.height / self.scale)
+        self.canvas_bounds = QRectF(0, 0, self.width / self.scale, self.height / self.scale)
         self.free_slots = self.slot_generator.generate_slots(
-            self.widgets, canvas_bounds, self.padding
+            self.widgets, self.canvas_bounds, self.padding
         )
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
@@ -727,7 +729,7 @@ class KeyboardWidget(QWidget):
         mask_font.setPointSize(round(mask_font.pointSize() * 0.8))
 
         # Draw free slots grid (always visible, below keys)
-        self.slot_renderer.render(qp, self.free_slots, self.scale)
+        self.slot_renderer.render(qp, self.free_slots, self.scale, self.canvas_bounds)
 
         for idx, key in enumerate(self.widgets):
             qp.save()
