@@ -12,21 +12,14 @@ class ConnectorRouter:
         self.graph = WaypointGraph(key_rects, avg_key_size)
 
     def route(self, label_center, key_rect):
-        """Find a path from label center to the key using graph traversal."""
+        """Find a path from key to label using greedy graph traversal."""
         key_center = key_rect.center()
         entry_wp = self._find_entry_waypoint(key_rect)
         if entry_wp is None:
             return [key_center, label_center]
-        exit_wp = self._find_exit_waypoint(label_center)
         path = [key_center, entry_wp.position]
-        if exit_wp and exit_wp != entry_wp:
-            graph_path = self._traverse_graph_to_target(entry_wp, exit_wp)
-            path.extend(graph_path)
-            if not graph_path or graph_path[-1] != exit_wp.position:
-                path.append(exit_wp.position)
-        else:
-            graph_path = self._traverse_graph(entry_wp, label_center)
-            path.extend(graph_path)
+        graph_path = self._traverse_graph(entry_wp, label_center)
+        path.extend(graph_path)
         path.append(label_center)
         return path
 

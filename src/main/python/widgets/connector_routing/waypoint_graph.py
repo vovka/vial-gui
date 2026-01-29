@@ -180,11 +180,9 @@ class WaypointGraph:
         return sorted_wps[:count]
 
     def _connect_waypoints(self):
-        """Connect waypoints along the same gap lines."""
+        """Connect waypoints along the same gap lines only."""
         self._connect_horizontal_lines()
         self._connect_vertical_lines()
-        self._connect_perimeter_to_interior()
-        self._connect_components()
 
     def _connect_horizontal_lines(self):
         """Connect waypoints on the same horizontal line."""
