@@ -17,14 +17,28 @@ class ConnectorRouter:
         entry_wp = self._find_entry_waypoint(key_rect)
         if entry_wp is None:
             return [key_center, label_center]
+        exit_wp = self._find_exit_waypoint(label_center)
         path = [key_center, entry_wp.position]
-        graph_path = self._traverse_graph(entry_wp, label_center)
-        path.extend(graph_path)
+        if exit_wp and exit_wp != entry_wp:
+            graph_path = self._traverse_graph_to_target(entry_wp, exit_wp)
+            path.extend(graph_path)
+            path.append(exit_wp.position)
+        else:
+            graph_path = self._traverse_graph(entry_wp, label_center)
+            path.extend(graph_path)
         path.append(label_center)
         return path
 
+    def _find_exit_waypoint(self, label_center):
+        """Find the best exit waypoint near the label."""
+        candidates = self.graph.find_nearest_waypoints(label_center, count=5)
+        for wp in candidates:
+            if len(wp.neighbors) >= 2:
+                return wp
+        return candidates[0] if candidates else None
+
     def _find_entry_waypoint(self, key_rect):
-        """Find the best entry waypoint adjacent to the key."""
+        """Find the best entry waypoint adjacent to the key, preferring connected ones."""
         key_center = key_rect.center()
         margin = self.avg_key_size * 0.5
         nearby = []
@@ -32,8 +46,14 @@ class ConnectorRouter:
             if self._is_waypoint_adjacent(wp, key_rect, margin):
                 nearby.append(wp)
         if nearby:
-            return min(nearby, key=lambda w: w.distance_to(key_center))
-        candidates = self.graph.find_nearest_waypoints(key_center, count=5)
+            connected = [wp for wp in nearby if len(wp.neighbors) >= 2]
+            if connected:
+                return min(connected, key=lambda w: w.distance_to(key_center))
+            return min(nearby, key=lambda w: (-len(w.neighbors), w.distance_to(key_center)))
+        candidates = self.graph.find_nearest_waypoints(key_center, count=10)
+        for wp in candidates:
+            if not key_rect.contains(wp.position) and len(wp.neighbors) >= 2:
+                return wp
         for wp in candidates:
             if not key_rect.contains(wp.position):
                 return wp
@@ -63,6 +83,23 @@ class ConnectorRouter:
             if current.is_leaf():
                 break
         return path
+
+    def _traverse_graph_to_target(self, start_wp, target_wp):
+        """Traverse the graph from start waypoint to target waypoint using BFS."""
+        if start_wp == target_wp:
+            return []
+        from collections import deque
+        queue = deque([(start_wp, [])])
+        visited = {start_wp}
+        while queue:
+            current, path = queue.popleft()
+            for neighbor in current.neighbors:
+                if neighbor == target_wp:
+                    return path + [neighbor.position]
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, path + [neighbor.position]))
+        return self._traverse_graph(start_wp, target_wp.position)
 
     def _select_next_waypoint(self, current, destination, visited):
         """Select the next waypoint, preferring ones closer to destination."""
