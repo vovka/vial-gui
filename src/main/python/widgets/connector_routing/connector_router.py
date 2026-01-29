@@ -1,55 +1,99 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import heapq
 from PyQt5.QtCore import QPointF
 from widgets.connector_routing.geometry_utils import GeometryUtils
 
 
 class ConnectorRouter:
-    """Routes connectors through gap intersection points."""
+    """Routes connectors using shortest Manhattan path through intersections."""
 
     def __init__(self, key_rects, avg_key_size, gap_intersections=None):
         self.key_rects = key_rects
         self.avg_key_size = avg_key_size
         self.gap_intersections = gap_intersections or []
+        self._tolerance = avg_key_size * 0.1
 
     def route(self, label_center, key_rect):
-        """Find a path from label center to the key through one intersection."""
+        """Find shortest Manhattan path from label to key."""
         key_point = self._find_key_connection_point(key_rect, label_center)
         if not self.gap_intersections:
             return self._build_simple_path(label_center, key_point)
-        # Find the intersection nearest to the key
-        nearest = self._find_nearest_intersection(key_point)
-        if nearest is None:
-            return self._build_simple_path(label_center, key_point)
-        # Build path: label -> nearest intersection -> key
-        path = self._build_path_via_intersection(label_center, nearest, key_point)
+        path = self._find_shortest_manhattan_path(label_center, key_point)
         return self._normalize_path(path)
 
-    def _find_nearest_intersection(self, point):
-        """Find the nearest intersection to a point."""
-        if not self.gap_intersections:
-            return None
-        return min(self.gap_intersections,
-                   key=lambda p: GeometryUtils.distance(p, point))
+    def _find_shortest_manhattan_path(self, start, end):
+        """A* pathfinding with Manhattan distance through intersection points."""
+        # Build list of all nodes: start, end, and all intersections
+        nodes = [start, end] + list(self.gap_intersections)
 
-    def _build_path_via_intersection(self, start, intersection, end):
-        """Build path: start -> intersection -> end with orthogonal segments."""
-        path = [start]
-        # First segment: horizontal from start toward intersection's X
-        if abs(start.x() - intersection.x()) > 0.1:
-            path.append(QPointF(intersection.x(), start.y()))
-        # Then vertical to reach intersection
-        if abs(path[-1].y() - intersection.y()) > 0.1:
-            path.append(intersection)
-        # From intersection to end: vertical first, then horizontal
-        if abs(intersection.y() - end.y()) > 0.1:
-            path.append(QPointF(intersection.x(), end.y()))
-        # Finally horizontal to end
-        if abs(path[-1].x() - end.x()) > 0.1:
-            path.append(end)
-        else:
-            path.append(end)
-        return path
+        def manhattan_dist(p1, p2):
+            return abs(p1.x() - p2.x()) + abs(p1.y() - p2.y())
+
+        def node_key(p):
+            return (round(p.x(), 1), round(p.y(), 1))
+
+        # A* algorithm - all nodes connected with Manhattan distance cost
+        start_key = node_key(start)
+        end_key = node_key(end)
+
+        # Priority queue: (f_score, counter, node_key, node)
+        counter = 0
+        open_set = [(manhattan_dist(start, end), counter, start_key, start)]
+
+        came_from = {}
+        g_score = {start_key: 0}
+        visited = set()
+
+        while open_set:
+            _, _, current_key, current = heapq.heappop(open_set)
+
+            if current_key in visited:
+                continue
+            visited.add(current_key)
+
+            if current_key == end_key:
+                # Reconstruct path
+                path = [end]
+                while current_key in came_from:
+                    current_key, current = came_from[current_key]
+                    path.append(current)
+                path.reverse()
+                return self._make_orthogonal(path)
+
+            # All intersection nodes are potential neighbors
+            for neighbor in nodes:
+                neighbor_key = node_key(neighbor)
+                if neighbor_key == current_key or neighbor_key in visited:
+                    continue
+
+                # Cost is Manhattan distance to neighbor
+                tentative_g = g_score[current_key] + manhattan_dist(current, neighbor)
+
+                if neighbor_key not in g_score or tentative_g < g_score[neighbor_key]:
+                    came_from[neighbor_key] = (current_key, current)
+                    g_score[neighbor_key] = tentative_g
+                    f_score = tentative_g + manhattan_dist(neighbor, end)
+                    counter += 1
+                    heapq.heappush(open_set, (f_score, counter, neighbor_key, neighbor))
+
+        # No path found, fallback to simple path
+        return self._build_simple_path(start, end)
+
+    def _make_orthogonal(self, path):
+        """Convert path to orthogonal segments by adding corner points."""
+        if len(path) < 2:
+            return path
+        result = [path[0]]
+        for i in range(1, len(path)):
+            prev = result[-1]
+            curr = path[i]
+            # If not aligned, add a corner point
+            if abs(prev.x() - curr.x()) > 0.1 and abs(prev.y() - curr.y()) > 0.1:
+                # Add corner: go horizontal first, then vertical
+                result.append(QPointF(curr.x(), prev.y()))
+            result.append(curr)
+        return result
 
     def _build_simple_path(self, start, end):
         """Build a simple L-shaped path."""
