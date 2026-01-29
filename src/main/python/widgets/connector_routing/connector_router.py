@@ -118,8 +118,16 @@ class ConnectorRouter:
         if not chain:
             return self._build_simple_path(start, end, None)
         path = [start]
+        current = start
         for wp in chain:
+            # Add orthogonal corner if needed
+            if abs(current.x() - wp.x()) > 0.1 and abs(current.y() - wp.y()) > 0.1:
+                path.append(QPointF(wp.x(), current.y()))
             path.append(wp)
+            current = wp
+        # Final leg to end
+        if abs(current.x() - end.x()) > 0.1 and abs(current.y() - end.y()) > 0.1:
+            path.append(QPointF(end.x(), current.y()))
         path.append(end)
         return path
 
@@ -138,14 +146,37 @@ class ConnectorRouter:
         return sorted_points[:count]
 
     def _build_path_via_waypoints(self, start, end, wp_start, wp_end):
-        """Build path: start -> wp_start -> wp_end -> end."""
+        """Build orthogonal path: start -> wp_start -> wp_end -> end."""
         if self._point_key(wp_start) == self._point_key(wp_end):
             return self._build_path_via_single_waypoint(start, end, wp_start)
-        return [start, wp_start, wp_end, end]
+        # Build orthogonal path through both waypoints
+        path = [start]
+        # First leg: start to wp_start (orthogonal)
+        if abs(start.x() - wp_start.x()) > 0.1 and abs(start.y() - wp_start.y()) > 0.1:
+            path.append(QPointF(wp_start.x(), start.y()))
+        path.append(wp_start)
+        # Middle leg: wp_start to wp_end (orthogonal)
+        if abs(wp_start.x() - wp_end.x()) > 0.1 and abs(wp_start.y() - wp_end.y()) > 0.1:
+            path.append(QPointF(wp_end.x(), wp_start.y()))
+        path.append(wp_end)
+        # Last leg: wp_end to end (orthogonal)
+        if abs(wp_end.x() - end.x()) > 0.1 and abs(wp_end.y() - end.y()) > 0.1:
+            path.append(QPointF(end.x(), wp_end.y()))
+        path.append(end)
+        return path
 
     def _build_path_via_single_waypoint(self, start, end, waypoint):
-        """Build path: start -> waypoint -> end."""
-        return [start, waypoint, end]
+        """Build orthogonal path: start -> waypoint -> end."""
+        path = [start]
+        # First leg: start to waypoint (orthogonal)
+        if abs(start.x() - waypoint.x()) > 0.1 and abs(start.y() - waypoint.y()) > 0.1:
+            path.append(QPointF(waypoint.x(), start.y()))
+        path.append(waypoint)
+        # Second leg: waypoint to end (orthogonal)
+        if abs(waypoint.x() - end.x()) > 0.1 and abs(waypoint.y() - end.y()) > 0.1:
+            path.append(QPointF(end.x(), waypoint.y()))
+        path.append(end)
+        return path
 
     def _build_simple_path(self, start, end, target_key_rect):
         """Build a simple L-shaped path."""
