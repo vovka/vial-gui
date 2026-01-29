@@ -24,42 +24,72 @@ class ConnectorRouter:
         path = self._find_path_to_key(label_center, key_rect)
         return self._normalize_path(path)
 
-    def _find_path_to_key(self, start, key_rect):
-        """Find path from start to key, connecting to nearest edge point."""
-        key_point = self._find_key_connection_point(key_rect, start)
+    def _find_path_to_key(self, label_center, key_rect):
+        """Find path from label to key: label -> straight -> intersection -> grid -> key."""
+        key_point = self._find_key_connection_point(key_rect, label_center)
 
-        # Find ALL intersections that can connect to key without crossing keys
-        valid_endpoints = []
+        # Find intersections that can connect to key without crossing keys
+        valid_key_intersections = []
         for intersection in self.gap_intersections:
             int_key_point = self._find_key_connection_point(key_rect, intersection)
             if not self._segment_crosses_keys(intersection, int_key_point, key_rect):
-                valid_endpoints.append((intersection, int_key_point))
+                valid_key_intersections.append((intersection, int_key_point))
 
-        if not valid_endpoints:
-            # No valid intersection - use simple path
-            return self._build_simple_path(start, key_point)
+        if not valid_key_intersections:
+            return self._build_simple_path(label_center, key_point)
 
-        # Find best path to any valid endpoint
+        # Find the intersection closest to the label that can reach a valid key intersection
         best_path = None
-        best_cost = float('inf')
+        best_label_intersection = None
         best_key_point = key_point
+        best_dist_to_label = float('inf')
 
-        for intersection, int_key_point in valid_endpoints:
-            path = self._find_shortest_manhattan_path(start, intersection, key_rect)
-            if path and len(path) >= 1:
-                # Total cost includes path + final segment
-                cost = self._path_length(path) + GeometryUtils.distance(intersection, int_key_point)
-                if cost < best_cost:
-                    best_cost = cost
-                    best_path = path
-                    best_key_point = int_key_point
+        for key_intersection, int_key_point in valid_key_intersections:
+            # Find path from key_intersection back through grid
+            # We want to find which intersection is closest to label
+            reachable = self._find_reachable_intersections(key_intersection, key_rect)
 
-        if not best_path:
-            return self._build_simple_path(start, key_point)
+            for label_intersection in reachable:
+                dist_to_label = GeometryUtils.distance(label_intersection, label_center)
+                if dist_to_label < best_dist_to_label:
+                    # Build path from this intersection to key
+                    path = self._find_shortest_manhattan_path(label_intersection, key_intersection, key_rect)
+                    if path:
+                        best_dist_to_label = dist_to_label
+                        best_path = path
+                        best_label_intersection = label_intersection
+                        best_key_point = int_key_point
 
-        # Add the final connection to the key
-        best_path.append(best_key_point)
-        return best_path
+        if not best_path or not best_label_intersection:
+            return self._build_simple_path(label_center, key_point)
+
+        # Build final path: label -> closest intersection -> grid path -> key
+        final_path = [label_center, best_label_intersection] + best_path[1:] + [best_key_point]
+        return final_path
+
+    def _find_reachable_intersections(self, start_intersection, key_rect):
+        """Find all intersections reachable from start through the grid."""
+        reachable = [start_intersection]
+        visited = {(round(start_intersection.x(), 1), round(start_intersection.y(), 1))}
+        queue = [start_intersection]
+
+        while queue:
+            current = queue.pop(0)
+            for other in self.gap_intersections:
+                key = (round(other.x(), 1), round(other.y(), 1))
+                if key in visited:
+                    continue
+                # Check if aligned and no key crossing
+                if self._are_aligned(current, other) and not self._segment_crosses_keys(current, other, key_rect):
+                    visited.add(key)
+                    reachable.append(other)
+                    queue.append(other)
+
+        return reachable
+
+    def _are_aligned(self, p1, p2):
+        """Check if two points share X or Y coordinate."""
+        return abs(p1.x() - p2.x()) < self._tolerance or abs(p1.y() - p2.y()) < self._tolerance
 
     def _segment_crosses_keys(self, p1, p2, exclude_rect):
         """Check if segment crosses any key except excluded one."""
