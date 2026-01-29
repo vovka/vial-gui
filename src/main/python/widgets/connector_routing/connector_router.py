@@ -28,34 +28,47 @@ class ConnectorRouter:
         """Find path from start to key, connecting to nearest edge point."""
         # Find intersections near the key
         key_center = key_rect.center()
-        nearby_to_key = self._find_nearby_intersections(key_center, count=8)
+        nearby_to_key = self._find_nearby_intersections(key_center, count=12)
 
         if not nearby_to_key:
             key_point = self._find_key_connection_point(key_rect, start)
             return self._build_simple_path(start, key_point)
 
         # Find best path to any intersection near the key
+        # that can connect to the key without crossing other keys
         best_path = None
         best_cost = float('inf')
 
         for target_intersection in nearby_to_key:
+            # Check if this intersection can connect to key without crossing
+            key_point = self._find_key_connection_point(key_rect, target_intersection)
+            if self._segment_crosses_keys(target_intersection, key_point, key_rect):
+                continue  # Skip - final segment would cross keys
+
             path = self._find_shortest_manhattan_path(start, target_intersection, key_rect)
-            if path and len(path) >= 2:
+            if path and len(path) >= 1:
                 cost = self._path_length(path)
                 if cost < best_cost:
                     best_cost = cost
                     best_path = path
+                    best_key_point = key_point
 
         if not best_path:
             key_point = self._find_key_connection_point(key_rect, start)
             return self._build_simple_path(start, key_point)
 
-        # Connect from last intersection to the key's nearest edge
-        last_point = best_path[-1]
-        key_point = self._find_key_connection_point(key_rect, last_point)
-        best_path.append(key_point)
-
+        # Add the final connection to the key
+        best_path.append(best_key_point)
         return best_path
+
+    def _segment_crosses_keys(self, p1, p2, exclude_rect):
+        """Check if segment crosses any key except excluded one."""
+        for rect in self.key_rects:
+            if rect == exclude_rect:
+                continue
+            if GeometryUtils.line_intersects_rect(p1, p2, rect):
+                return True
+        return False
 
     def _find_nearby_intersections(self, point, count=5):
         """Find nearest intersections to a point."""
