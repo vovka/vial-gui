@@ -603,15 +603,7 @@ class KeyboardWidget(QWidget):
                     continue
                 seen.add(key)
                 intersections.append(point)
-
-        deduped = []
-        tolerance = max(1.0, avg_key_size * 0.04)
-        for point in intersections:
-            if any(math.hypot(point.x() - existing.x(), point.y() - existing.y()) <= tolerance
-                   for existing in deduped):
-                continue
-            deduped.append(point)
-        return deduped
+        return intersections
 
     def _debug_key_rects(self):
         rects = []
