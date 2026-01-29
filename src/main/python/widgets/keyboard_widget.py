@@ -554,15 +554,24 @@ class KeyboardWidget(QWidget):
         canvas_height = self.height / self.scale if self.scale else self.height
         canvas_bounds = QRectF(0, 0, canvas_width, canvas_height)
 
+        t1 = time.time()
         combo_infos = ComboInfoBuilder(label_metrics, name_metrics).build(combos)
+        logger.warning(f"  ComboInfoBuilder.build: {time.time()-t1:.3f}s")
+
+        t2 = time.time()
         avg_key_size = self._compute_avg_key_size()
         assigner = ComboSlotAssigner(self.free_slots, self.padding, canvas_bounds, key_rects, avg_key_size)
         assignments = assigner.assign(combo_infos)
+        logger.warning(f"  ComboSlotAssigner.assign: {time.time()-t2:.3f}s")
 
+        t3 = time.time()
         connector_router = ConnectorRouter(key_rects, avg_key_size)
+        logger.warning(f"  ConnectorRouter init: {time.time()-t3:.3f}s, {len(connector_router.graph.waypoints)} waypoints, {len(key_rects)} keys")
         path_renderer = ConnectorPathRenderer(corner_radius=avg_key_size * 0.15)
 
+        t4 = time.time()
         cache = []
+        route_count = 0
         for info in combo_infos:
             assignment = assignments.get(info.index)
             if not assignment:
@@ -576,11 +585,13 @@ class KeyboardWidget(QWidget):
                     key_rect = widget.polygon.boundingRect()
                     points = connector_router.route(rect_center, key_rect)
                     connector_paths.append(path_renderer.create_path(points))
+                    route_count += 1
             cache.append({
                 "rect": rect, "slot": slot, "connector_paths": connector_paths,
                 "output_label": info.output_label, "combo_label": info.combo_label,
                 "avg_size": info.avg_size, "adjacent": info.adjacent,
             })
+        logger.warning(f"  Routing loop: {time.time()-t4:.3f}s, {route_count} routes")
         elapsed = time.time() - start_time
         logger.warning(f"_compute_combo_cache FINISHED in {elapsed:.3f}s, {len(cache)} items")
         return cache
