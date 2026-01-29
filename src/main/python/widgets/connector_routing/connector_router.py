@@ -22,7 +22,8 @@ class ConnectorRouter:
         if exit_wp and exit_wp != entry_wp:
             graph_path = self._traverse_graph_to_target(entry_wp, exit_wp)
             path.extend(graph_path)
-            path.append(exit_wp.position)
+            if not graph_path or graph_path[-1] != exit_wp.position:
+                path.append(exit_wp.position)
         else:
             graph_path = self._traverse_graph(entry_wp, label_center)
             path.extend(graph_path)
