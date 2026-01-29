@@ -13,47 +13,17 @@ class ConnectorRouter:
         self.gap_intersections = gap_intersections or []
 
     def route(self, label_center, key_rect):
-        """Find a path from label center to the key through intersections."""
+        """Find a path from label center to the key through one intersection."""
         key_point = self._find_key_connection_point(key_rect, label_center)
         if not self.gap_intersections:
             return self._build_simple_path(label_center, key_point)
-        path = self._find_direct_path(label_center, key_point, key_rect)
+        # Find the intersection nearest to the key
+        nearest = self._find_nearest_intersection(key_point)
+        if nearest is None:
+            return self._build_simple_path(label_center, key_point)
+        # Build path: label -> nearest intersection -> key
+        path = self._build_path_via_intersection(label_center, nearest, key_point)
         return self._normalize_path(path)
-
-    def _find_direct_path(self, start, end, target_key_rect):
-        """Find the most direct path through intersection points."""
-        # Find intersections between start and end
-        between = self._find_intersections_between(start, end)
-        if not between:
-            # Fallback: find nearest intersection to the midpoint
-            midpoint = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
-            nearest = self._find_nearest_intersection(midpoint)
-            if nearest:
-                between = [nearest]
-        if not between:
-            return self._build_simple_path(start, end)
-        # Sort by distance from start to create a path
-        between.sort(key=lambda p: GeometryUtils.distance(start, p))
-        # Build path through these points
-        return self._build_path_through_points(start, between, end)
-
-    def _find_intersections_between(self, start, end):
-        """Find intersection points that lie between start and end."""
-        min_x = min(start.x(), end.x())
-        max_x = max(start.x(), end.x())
-        min_y = min(start.y(), end.y())
-        max_y = max(start.y(), end.y())
-        # Expand the box slightly
-        margin = self.avg_key_size * 0.3
-        min_x -= margin
-        max_x += margin
-        min_y -= margin
-        max_y += margin
-        result = []
-        for p in self.gap_intersections:
-            if min_x <= p.x() <= max_x and min_y <= p.y() <= max_y:
-                result.append(p)
-        return result
 
     def _find_nearest_intersection(self, point):
         """Find the nearest intersection to a point."""
@@ -62,27 +32,20 @@ class ConnectorRouter:
         return min(self.gap_intersections,
                    key=lambda p: GeometryUtils.distance(p, point))
 
-    def _build_path_through_points(self, start, waypoints, end):
-        """Build orthogonal path from start through waypoints to end."""
+    def _build_path_via_intersection(self, start, intersection, end):
+        """Build path: start -> intersection -> end with orthogonal segments."""
         path = [start]
-        current = start
-        for wp in waypoints:
-            # Go horizontally first, then vertically to reach waypoint
-            if abs(current.x() - wp.x()) > 0.1:
-                path.append(QPointF(wp.x(), current.y()))
-            if abs(current.y() - wp.y()) > 0.1:
-                path.append(wp)
-            else:
-                # Already at correct Y, just add the waypoint
-                if abs(current.x() - wp.x()) > 0.1:
-                    path.append(wp)
-            current = wp
-        # Final segment to end
-        if abs(current.x() - end.x()) > 0.1:
-            path.append(QPointF(end.x(), current.y()))
-        if abs(current.y() - end.y()) > 0.1:
-            path.append(end)
-        elif abs(current.x() - end.x()) > 0.1:
+        # First segment: horizontal from start toward intersection's X
+        if abs(start.x() - intersection.x()) > 0.1:
+            path.append(QPointF(intersection.x(), start.y()))
+        # Then vertical to reach intersection
+        if abs(path[-1].y() - intersection.y()) > 0.1:
+            path.append(intersection)
+        # From intersection to end: vertical first, then horizontal
+        if abs(intersection.y() - end.y()) > 0.1:
+            path.append(QPointF(intersection.x(), end.y()))
+        # Finally horizontal to end
+        if abs(path[-1].x() - end.x()) > 0.1:
             path.append(end)
         else:
             path.append(end)
@@ -136,7 +99,6 @@ class ConnectorRouter:
             prev = simplified[-1]
             curr = deduped[i]
             next_pt = deduped[i + 1]
-            # Check if all three points are on same horizontal or vertical line
             same_x = abs(prev.x() - curr.x()) < 0.01 and abs(curr.x() - next_pt.x()) < 0.01
             same_y = abs(prev.y() - curr.y()) < 0.01 and abs(curr.y() - next_pt.y()) < 0.01
             if not (same_x or same_y):
