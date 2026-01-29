@@ -6,26 +6,23 @@ from widgets.connector_routing.geometry_utils import GeometryUtils
 
 
 class ConnectorRouter:
-    """Routes connectors using shortest Manhattan path avoiding keys."""
-
-    KEY_CROSSING_PENALTY = 1000  # High penalty for crossing keys
+    """Routes connectors using shortest Manhattan path through intersections."""
 
     def __init__(self, key_rects, avg_key_size, gap_intersections=None):
         self.key_rects = key_rects
         self.avg_key_size = avg_key_size
         self.gap_intersections = gap_intersections or []
-        self._tolerance = avg_key_size * 0.1
 
     def route(self, label_center, key_rect):
-        """Find shortest Manhattan path from label to key, avoiding keys."""
+        """Find shortest Manhattan path from label to key."""
         key_point = self._find_key_connection_point(key_rect, label_center)
         if not self.gap_intersections:
             return self._build_simple_path(label_center, key_point)
-        path = self._find_shortest_manhattan_path(label_center, key_point, key_rect)
+        path = self._find_shortest_manhattan_path(label_center, key_point)
         return self._normalize_path(path)
 
-    def _find_shortest_manhattan_path(self, start, end, target_key_rect):
-        """A* pathfinding with Manhattan distance, penalizing key crossings."""
+    def _find_shortest_manhattan_path(self, start, end):
+        """A* pathfinding - pure shortest Manhattan distance."""
         nodes = [start, end] + list(self.gap_intersections)
 
         def manhattan_dist(p1, p2):
@@ -33,13 +30,6 @@ class ConnectorRouter:
 
         def node_key(p):
             return (round(p.x(), 1), round(p.y(), 1))
-
-        def edge_cost(p1, p2):
-            """Cost = Manhattan distance + penalty for each key crossed."""
-            base_cost = manhattan_dist(p1, p2)
-            # Check orthogonal path for key crossings
-            crossings = self._count_orthogonal_crossings(p1, p2, target_key_rect)
-            return base_cost + crossings * self.KEY_CROSSING_PENALTY
 
         start_key = node_key(start)
         end_key = node_key(end)
@@ -71,7 +61,9 @@ class ConnectorRouter:
                 if neighbor_key == current_key or neighbor_key in visited:
                     continue
 
-                tentative_g = g_score[current_key] + edge_cost(current, neighbor)
+                # Pure Manhattan distance cost
+                cost = manhattan_dist(current, neighbor)
+                tentative_g = g_score[current_key] + cost
 
                 if neighbor_key not in g_score or tentative_g < g_score[neighbor_key]:
                     came_from[neighbor_key] = (current_key, current)
@@ -81,27 +73,6 @@ class ConnectorRouter:
                     heapq.heappush(open_set, (f_score, counter, neighbor_key, neighbor))
 
         return self._build_simple_path(start, end)
-
-    def _count_orthogonal_crossings(self, p1, p2, target_key_rect):
-        """Count keys crossed by orthogonal path from p1 to p2."""
-        # Orthogonal path: p1 -> corner -> p2
-        corner = QPointF(p2.x(), p1.y())
-        count = 0
-        # Check horizontal segment: p1 to corner
-        count += self._count_segment_crossings(p1, corner, target_key_rect)
-        # Check vertical segment: corner to p2
-        count += self._count_segment_crossings(corner, p2, target_key_rect)
-        return count
-
-    def _count_segment_crossings(self, p1, p2, target_key_rect):
-        """Count how many keys a line segment crosses."""
-        count = 0
-        for rect in self.key_rects:
-            if rect == target_key_rect:
-                continue
-            if GeometryUtils.line_intersects_rect(p1, p2, rect):
-                count += 1
-        return count
 
     def _make_orthogonal(self, path):
         """Convert path to orthogonal segments by adding corner points."""
