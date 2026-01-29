@@ -438,44 +438,66 @@ class KeyboardWidget(QWidget):
             return []
         vertical_lines = []
         horizontal_lines = []
-        row_groups = self._group_rects_by_row(key_rects, avg_key_size)
-        margin = avg_key_size * 0.12
-        for row_rects in row_groups.values():
-            if len(row_rects) < 2:
-                continue
-            sorted_rects = sorted(row_rects, key=lambda r: r.left())
-            for i in range(len(sorted_rects) - 1):
-                r1, r2 = sorted_rects[i], sorted_rects[i + 1]
-                overlap_top = max(r1.top(), r2.top())
-                overlap_bottom = min(r1.bottom(), r2.bottom())
+        epsilon = avg_key_size * 0.06
+
+        for rect in key_rects:
+            min_left = None
+            candidates = []
+            for other in key_rects:
+                if other is rect or other.left() <= rect.right():
+                    continue
+                overlap_top = max(rect.top(), other.top())
+                overlap_bottom = min(rect.bottom(), other.bottom())
                 if overlap_top >= overlap_bottom:
                     continue
-                overlap_top -= margin
-                overlap_bottom += margin
-                gap_x = (r1.right() + r2.left()) / 2
+                if min_left is None or other.left() < (min_left - epsilon):
+                    min_left = other.left()
+                    candidates = [(other, overlap_top, overlap_bottom)]
+                elif abs(other.left() - min_left) <= epsilon:
+                    candidates.append((other, overlap_top, overlap_bottom))
+            for other, overlap_top, overlap_bottom in candidates:
+                gap_x = (rect.right() + other.left()) / 2
                 vertical_lines.append((gap_x, overlap_top, overlap_bottom))
-        column_groups = self._group_rects_by_column(key_rects, avg_key_size)
-        for column_rects in column_groups.values():
-            if len(column_rects) < 2:
-                continue
-            sorted_rects = sorted(column_rects, key=lambda r: r.top())
-            for i in range(len(sorted_rects) - 1):
-                r1, r2 = sorted_rects[i], sorted_rects[i + 1]
-                overlap_left = max(r1.left(), r2.left())
-                overlap_right = min(r1.right(), r2.right())
+
+            min_top = None
+            candidates = []
+            for other in key_rects:
+                if other is rect or other.top() <= rect.bottom():
+                    continue
+                overlap_left = max(rect.left(), other.left())
+                overlap_right = min(rect.right(), other.right())
                 if overlap_left >= overlap_right:
                     continue
-                overlap_left -= margin
-                overlap_right += margin
-                gap_y = (r1.bottom() + r2.top()) / 2
+                if min_top is None or other.top() < (min_top - epsilon):
+                    min_top = other.top()
+                    candidates = [(other, overlap_left, overlap_right)]
+                elif abs(other.top() - min_top) <= epsilon:
+                    candidates.append((other, overlap_left, overlap_right))
+            for other, overlap_left, overlap_right in candidates:
+                gap_y = (rect.bottom() + other.top()) / 2
                 horizontal_lines.append((gap_y, overlap_left, overlap_right))
+
+        def _dedupe(segments, precision=2):
+            seen = set()
+            result = []
+            for seg in segments:
+                key = tuple(round(value, precision) for value in seg)
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(seg)
+            return result
+
+        vertical_lines = _dedupe(vertical_lines)
+        horizontal_lines = _dedupe(horizontal_lines)
+
         intersections = []
         seen = set()
         for gap_x, y_min, y_max in vertical_lines:
             for gap_y, x_min, x_max in horizontal_lines:
-                if (x_min - margin) <= gap_x <= (x_max + margin) and (y_min - margin) <= gap_y <= (y_max + margin):
+                if (x_min - epsilon) <= gap_x <= (x_max + epsilon) and (y_min - epsilon) <= gap_y <= (y_max + epsilon):
                     point = QPointF(gap_x, gap_y)
-                    if any(rect.contains(point) for rect in key_rects):
+                    if any(rect.adjusted(-epsilon, -epsilon, epsilon, epsilon).contains(point) for rect in key_rects):
                         continue
                     key = (round(point.x(), 1), round(point.y(), 1))
                     if key in seen:
@@ -484,38 +506,16 @@ class KeyboardWidget(QWidget):
                     intersections.append(point)
         return intersections
 
-    def _group_rects_by_row(self, key_rects, avg_key_size):
-        rows = {}
-        tolerance = avg_key_size * 0.4
-        for rect in key_rects:
-            cy = rect.center().y()
-            found = False
-            for row_y in rows:
-                if abs(row_y - cy) < tolerance:
-                    rows[row_y].append(rect)
-                    found = True
-                    break
-            if not found:
-                rows[cy] = [rect]
-        return rows
-
-    def _group_rects_by_column(self, key_rects, avg_key_size):
-        columns = {}
-        tolerance = avg_key_size * 0.4
-        for rect in key_rects:
-            cx = rect.center().x()
-            found = False
-            for col_x in columns:
-                if abs(col_x - cx) < tolerance:
-                    columns[col_x].append(rect)
-                    found = True
-                    break
-            if not found:
-                columns[cx] = [rect]
-        return columns
+    def _debug_key_rects(self):
+        rects = []
+        for widget in self.widgets:
+            rects.append(QPolygonF(widget.bbox).boundingRect())
+            if widget.has2:
+                rects.append(QPolygonF(widget.bbox2).boundingRect())
+        return rects
 
     def _draw_gap_intersections(self, painter):
-        key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
+        key_rects = self._debug_key_rects()
         avg_key_size = self._compute_avg_key_size()
         intersections = self._gap_intersections(key_rects, avg_key_size)
         if not intersections:
