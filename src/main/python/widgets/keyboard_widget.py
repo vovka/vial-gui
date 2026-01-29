@@ -752,8 +752,9 @@ class KeyboardWidget(QWidget):
         logger.warning(f"  ComboSlotAssigner.assign: {time.time()-t2:.3f}s")
 
         t3 = time.time()
-        connector_router = ConnectorRouter(key_rects, avg_key_size)
-        logger.warning(f"  ConnectorRouter init: {time.time()-t3:.3f}s, {len(connector_router.graph.waypoints)} waypoints, {len(key_rects)} keys")
+        gap_intersections = self._gap_intersections(key_rects, avg_key_size)
+        connector_router = ConnectorRouter(key_rects, avg_key_size, gap_intersections)
+        logger.warning(f"  ConnectorRouter init: {time.time()-t3:.3f}s, {len(gap_intersections)} gap intersections, {len(key_rects)} keys")
         path_renderer = ConnectorPathRenderer(corner_radius=avg_key_size * 0.15)
 
         t4 = time.time()
