@@ -183,10 +183,11 @@ class WaypointGraph:
         """Connect waypoints along the same gap lines."""
         self._connect_horizontal_lines()
         self._connect_vertical_lines()
+        self._connect_perimeter_to_interior()
 
     def _connect_horizontal_lines(self):
         """Connect waypoints on the same horizontal line."""
-        tolerance = self.avg_key_size * 0.15
+        tolerance = self.avg_key_size * 0.4
         groups = {}
         for wp in self.waypoints:
             y_key = round(wp.y / tolerance) * tolerance
@@ -205,7 +206,7 @@ class WaypointGraph:
 
     def _connect_vertical_lines(self):
         """Connect waypoints on the same vertical line."""
-        tolerance = self.avg_key_size * 0.15
+        tolerance = self.avg_key_size * 0.4
         groups = {}
         for wp in self.waypoints:
             x_key = round(wp.x / tolerance) * tolerance
@@ -221,6 +222,18 @@ class WaypointGraph:
                 if not self._segment_blocked(w1.position, w2.position):
                     w1.add_neighbor(w2)
                     w2.add_neighbor(w1)
+
+    def _connect_perimeter_to_interior(self):
+        """Connect perimeter waypoints to nearest interior waypoints."""
+        perimeter_wps = [wp for wp in self.waypoints if wp.waypoint_type == "perimeter"]
+        interior_wps = [wp for wp in self.waypoints if wp.waypoint_type != "perimeter"]
+        for pwp in perimeter_wps:
+            nearest = sorted(interior_wps, key=lambda w: w.distance_to(pwp.position))[:3]
+            for iwp in nearest:
+                if not self._segment_blocked(pwp.position, iwp.position):
+                    pwp.add_neighbor(iwp)
+                    iwp.add_neighbor(pwp)
+                    break
 
     def _segment_blocked(self, p1, p2):
         """Check if segment between two points is blocked by a key."""
