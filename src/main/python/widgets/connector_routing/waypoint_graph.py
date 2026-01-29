@@ -183,10 +183,12 @@ class WaypointGraph:
         """Connect waypoints along the same gap lines only."""
         self._connect_horizontal_lines()
         self._connect_vertical_lines()
+        self._connect_perimeter_to_interior()
+        self._connect_components()
 
     def _connect_horizontal_lines(self):
-        """Connect waypoints on the same horizontal line."""
-        tolerance = self.avg_key_size * 0.4
+        """Connect adjacent waypoints on the same horizontal line."""
+        tolerance = self.avg_key_size * 0.1
         groups = {}
         for wp in self.waypoints:
             y_key = round(wp.y / tolerance) * tolerance
@@ -199,13 +201,13 @@ class WaypointGraph:
             sorted_wps = sorted(wps, key=lambda w: w.x)
             for i in range(len(sorted_wps) - 1):
                 w1, w2 = sorted_wps[i], sorted_wps[i + 1]
-                if not self._segment_blocked(w1.position, w2.position):
+                if not self._segment_crosses_key(w1.position, w2.position):
                     w1.add_neighbor(w2)
                     w2.add_neighbor(w1)
 
     def _connect_vertical_lines(self):
-        """Connect waypoints on the same vertical line."""
-        tolerance = self.avg_key_size * 0.4
+        """Connect adjacent waypoints on the same vertical line."""
+        tolerance = self.avg_key_size * 0.1
         groups = {}
         for wp in self.waypoints:
             x_key = round(wp.x / tolerance) * tolerance
@@ -218,24 +220,33 @@ class WaypointGraph:
             sorted_wps = sorted(wps, key=lambda w: w.y)
             for i in range(len(sorted_wps) - 1):
                 w1, w2 = sorted_wps[i], sorted_wps[i + 1]
-                if not self._segment_blocked(w1.position, w2.position):
+                if not self._segment_crosses_key(w1.position, w2.position):
                     w1.add_neighbor(w2)
                     w2.add_neighbor(w1)
+
+    def _segment_crosses_key(self, p1, p2):
+        """Check if segment between two points crosses any key rectangle."""
+        margin = self.avg_key_size * 0.02
+        for rect in self.key_rects:
+            shrunk = rect.adjusted(margin, margin, -margin, -margin)
+            if self._line_intersects_rect(p1, p2, shrunk):
+                return True
+        return False
 
     def _connect_perimeter_to_interior(self):
         """Connect perimeter waypoints to nearest interior waypoints."""
         perimeter_wps = [wp for wp in self.waypoints if wp.waypoint_type == "perimeter"]
         interior_wps = [wp for wp in self.waypoints if wp.waypoint_type != "perimeter"]
         for pwp in perimeter_wps:
-            nearest = sorted(interior_wps, key=lambda w: w.distance_to(pwp.position))[:3]
+            nearest = sorted(interior_wps, key=lambda w: w.distance_to(pwp.position))[:5]
             for iwp in nearest:
-                if not self._segment_blocked(pwp.position, iwp.position):
+                if not self._segment_crosses_key(pwp.position, iwp.position):
                     pwp.add_neighbor(iwp)
                     iwp.add_neighbor(pwp)
                     break
 
     def _connect_components(self):
-        """Connect disconnected graph components."""
+        """Connect disconnected graph components only if valid path exists."""
         components = self._find_components()
         if len(components) <= 1:
             return
@@ -246,6 +257,8 @@ class WaypointGraph:
                 for comp2 in components[i + 1:]:
                     for wp1 in comp1:
                         for wp2 in comp2:
+                            if self._segment_crosses_key(wp1.position, wp2.position):
+                                continue
                             dist = wp1.distance_to(wp2.position)
                             if dist < best_dist:
                                 best_dist = dist
@@ -256,6 +269,8 @@ class WaypointGraph:
                 wp2.add_neighbor(wp1)
                 comp1.extend(comp2)
                 components.remove(comp2)
+            else:
+                break
 
     def _find_components(self):
         """Find all connected components in the graph."""
