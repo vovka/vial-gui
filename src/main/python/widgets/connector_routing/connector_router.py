@@ -65,17 +65,23 @@ class ConnectorRouter:
         return path
 
     def _select_next_waypoint(self, current, destination, visited):
-        """Select the next waypoint that moves closer to destination."""
+        """Select the next waypoint, preferring ones closer to destination."""
         current_dist = current.distance_to(destination)
-        candidates = []
+        closer = []
+        farther = []
         for neighbor in current.neighbors:
             if neighbor in visited:
                 continue
             neighbor_dist = neighbor.distance_to(destination)
             if neighbor_dist < current_dist:
-                candidates.append((neighbor, neighbor_dist))
-        if not candidates:
-            return None
-        candidates.sort(key=lambda x: x[1])
-        return candidates[0][0]
+                closer.append((neighbor, neighbor_dist))
+            else:
+                farther.append((neighbor, neighbor_dist))
+        if closer:
+            closer.sort(key=lambda x: x[1])
+            return closer[0][0]
+        if farther:
+            farther.sort(key=lambda x: x[1])
+            return farther[0][0]
+        return None
 
