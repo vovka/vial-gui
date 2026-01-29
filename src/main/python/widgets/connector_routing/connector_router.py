@@ -1,95 +1,110 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import heapq
 from PyQt5.QtCore import QPointF
 from widgets.connector_routing.geometry_utils import GeometryUtils
 
 
 class ConnectorRouter:
-    """Routes connectors using shortest Manhattan path through intersections."""
+    """Routes connectors through intersections along the direct path."""
 
     def __init__(self, key_rects, avg_key_size, gap_intersections=None):
         self.key_rects = key_rects
         self.avg_key_size = avg_key_size
         self.gap_intersections = gap_intersections or []
-        self._tolerance = avg_key_size * 0.3
+        self._max_distance = avg_key_size * 0.8  # Max distance from direct line
 
     def route(self, label_center, key_rect):
-        """Find shortest Manhattan path from label to key."""
-        if not self.gap_intersections:
-            key_point = self._find_key_connection_point(key_rect, label_center)
-            return self._build_simple_path(label_center, key_point)
-
-        # First find path to nearest intersection to the key
-        path = self._find_path_to_key(label_center, key_rect)
-        return self._normalize_path(path)
-
-    def _find_path_to_key(self, label_center, key_rect):
-        """Find path from label to key: label -> straight -> intersection -> grid -> key."""
+        """Find path from label to key through intersections along direct line."""
         key_point = self._find_key_connection_point(key_rect, label_center)
 
-        # Find intersections that can connect to key without crossing keys
-        valid_key_intersections = []
+        if not self.gap_intersections:
+            return [label_center, key_point]
+
+        path = self._find_path_along_line(label_center, key_point, key_rect)
+        return self._normalize_path(path)
+
+    def _find_path_along_line(self, label_center, key_point, key_rect):
+        """Find intersections close to the direct line and connect them."""
+        # Find intersections close to the direct line from label to key
+        nearby = self._find_intersections_near_line(label_center, key_point)
+
+        if not nearby:
+            return [label_center, key_point]
+
+        # Sort by distance from label along the line direction
+        nearby_sorted = self._sort_along_line(nearby, label_center, key_point)
+
+        # Filter to keep only intersections that don't cross keys when connected
+        filtered = self._filter_connectable(nearby_sorted, key_rect)
+
+        if not filtered:
+            return [label_center, key_point]
+
+        # Build path: label -> first intersection (straight) -> ... -> key
+        path = [label_center]
+        for intersection in filtered:
+            path.append(intersection)
+        path.append(key_point)
+
+        return path
+
+    def _find_intersections_near_line(self, p1, p2):
+        """Find intersections within max_distance of the line from p1 to p2."""
+        result = []
         for intersection in self.gap_intersections:
-            int_key_point = self._find_key_connection_point(key_rect, intersection)
-            if not self._segment_crosses_keys(intersection, int_key_point, key_rect):
-                valid_key_intersections.append((intersection, int_key_point))
+            dist = self._point_to_line_distance(intersection, p1, p2)
+            if dist <= self._max_distance:
+                result.append(intersection)
+        return result
 
-        if not valid_key_intersections:
-            return self._build_simple_path(label_center, key_point)
+    def _point_to_line_distance(self, point, line_start, line_end):
+        """Calculate perpendicular distance from point to line segment."""
+        dx = line_end.x() - line_start.x()
+        dy = line_end.y() - line_start.y()
+        length_sq = dx * dx + dy * dy
 
-        # Find the intersection closest to the label that can reach a valid key intersection
-        best_path = None
-        best_label_intersection = None
-        best_key_point = key_point
-        best_dist_to_label = float('inf')
+        if length_sq == 0:
+            return GeometryUtils.distance(point, line_start)
 
-        for key_intersection, int_key_point in valid_key_intersections:
-            # Find path from key_intersection back through grid
-            # We want to find which intersection is closest to label
-            reachable = self._find_reachable_intersections(key_intersection, key_rect)
+        # Project point onto line
+        t = max(0, min(1, ((point.x() - line_start.x()) * dx +
+                          (point.y() - line_start.y()) * dy) / length_sq))
 
-            for label_intersection in reachable:
-                dist_to_label = GeometryUtils.distance(label_intersection, label_center)
-                if dist_to_label < best_dist_to_label:
-                    # Build path from this intersection to key
-                    path = self._find_shortest_manhattan_path(label_intersection, key_intersection, key_rect)
-                    if path:
-                        best_dist_to_label = dist_to_label
-                        best_path = path
-                        best_label_intersection = label_intersection
-                        best_key_point = int_key_point
+        proj_x = line_start.x() + t * dx
+        proj_y = line_start.y() + t * dy
 
-        if not best_path or not best_label_intersection:
-            return self._build_simple_path(label_center, key_point)
+        return GeometryUtils.distance(point, QPointF(proj_x, proj_y))
 
-        # Build final path: label -> closest intersection -> grid path -> key
-        final_path = [label_center, best_label_intersection] + best_path[1:] + [best_key_point]
-        return final_path
+    def _sort_along_line(self, intersections, line_start, line_end):
+        """Sort intersections by their projection position along the line."""
+        dx = line_end.x() - line_start.x()
+        dy = line_end.y() - line_start.y()
+        length_sq = dx * dx + dy * dy
 
-    def _find_reachable_intersections(self, start_intersection, key_rect):
-        """Find all intersections reachable from start through the grid."""
-        reachable = [start_intersection]
-        visited = {(round(start_intersection.x(), 1), round(start_intersection.y(), 1))}
-        queue = [start_intersection]
+        if length_sq == 0:
+            return intersections
 
-        while queue:
-            current = queue.pop(0)
-            for other in self.gap_intersections:
-                key = (round(other.x(), 1), round(other.y(), 1))
-                if key in visited:
-                    continue
-                # Check if aligned and no key crossing
-                if self._are_aligned(current, other) and not self._segment_crosses_keys(current, other, key_rect):
-                    visited.add(key)
-                    reachable.append(other)
-                    queue.append(other)
+        def projection_t(p):
+            return ((p.x() - line_start.x()) * dx +
+                    (p.y() - line_start.y()) * dy) / length_sq
 
-        return reachable
+        return sorted(intersections, key=projection_t)
 
-    def _are_aligned(self, p1, p2):
-        """Check if two points share X or Y coordinate."""
-        return abs(p1.x() - p2.x()) < self._tolerance or abs(p1.y() - p2.y()) < self._tolerance
+    def _filter_connectable(self, sorted_intersections, key_rect):
+        """Keep only intersections where consecutive connections don't cross keys."""
+        if not sorted_intersections:
+            return []
+
+        result = [sorted_intersections[0]]
+
+        for i in range(1, len(sorted_intersections)):
+            prev = result[-1]
+            curr = sorted_intersections[i]
+            # Only add if connection doesn't cross keys
+            if not self._segment_crosses_keys(prev, curr, key_rect):
+                result.append(curr)
+
+        return result
 
     def _segment_crosses_keys(self, p1, p2, exclude_rect):
         """Check if segment crosses any key except excluded one."""
@@ -99,102 +114,6 @@ class ConnectorRouter:
             if GeometryUtils.line_intersects_rect(p1, p2, rect):
                 return True
         return False
-
-    def _find_nearby_intersections(self, point, count=5):
-        """Find nearest intersections to a point."""
-        if not self.gap_intersections:
-            return []
-        sorted_pts = sorted(self.gap_intersections,
-                           key=lambda p: GeometryUtils.distance(p, point))
-        return sorted_pts[:count]
-
-    def _path_length(self, path):
-        """Calculate total path length."""
-        total = 0
-        for i in range(len(path) - 1):
-            total += GeometryUtils.distance(path[i], path[i + 1])
-        return total
-
-    def _find_shortest_manhattan_path(self, start, end, key_rect):
-        """A* pathfinding - only connect aligned nodes that don't cross keys."""
-        nodes = [start, end] + list(self.gap_intersections)
-
-        def manhattan_dist(p1, p2):
-            return abs(p1.x() - p2.x()) + abs(p1.y() - p2.y())
-
-        def are_aligned(p1, p2):
-            """Check if two points share X or Y coordinate."""
-            return abs(p1.x() - p2.x()) < self._tolerance or \
-                   abs(p1.y() - p2.y()) < self._tolerance
-
-        def crosses_keys(p1, p2):
-            """Check if segment crosses any key."""
-            for rect in self.key_rects:
-                if rect == key_rect:
-                    continue
-                if GeometryUtils.line_intersects_rect(p1, p2, rect):
-                    return True
-            return False
-
-        def can_connect(p1, p2):
-            """Check if two nodes can be connected (aligned and no key crossing)."""
-            if not are_aligned(p1, p2):
-                return False
-            if crosses_keys(p1, p2):
-                return False
-            return True
-
-        def node_key(p):
-            return (round(p.x(), 1), round(p.y(), 1))
-
-        start_key = node_key(start)
-        end_key = node_key(end)
-
-        counter = 0
-        open_set = [(manhattan_dist(start, end), counter, start_key, start)]
-
-        came_from = {}
-        g_score = {start_key: 0}
-        visited = set()
-
-        while open_set:
-            _, _, current_key, current = heapq.heappop(open_set)
-
-            if current_key in visited:
-                continue
-            visited.add(current_key)
-
-            if current_key == end_key:
-                path = [end]
-                while current_key in came_from:
-                    current_key, current = came_from[current_key]
-                    path.append(current)
-                path.reverse()
-                return path
-
-            for neighbor in nodes:
-                neighbor_key = node_key(neighbor)
-                if neighbor_key == current_key or neighbor_key in visited:
-                    continue
-                if not can_connect(current, neighbor):
-                    continue
-
-                cost = manhattan_dist(current, neighbor)
-                tentative_g = g_score[current_key] + cost
-
-                if neighbor_key not in g_score or tentative_g < g_score[neighbor_key]:
-                    came_from[neighbor_key] = (current_key, current)
-                    g_score[neighbor_key] = tentative_g
-                    f_score = tentative_g + manhattan_dist(neighbor, end)
-                    counter += 1
-                    heapq.heappush(open_set, (f_score, counter, neighbor_key, neighbor))
-
-        return None
-
-    def _build_simple_path(self, start, end):
-        """Build a simple L-shaped path."""
-        corner = QPointF(end.x(), start.y())
-        return [start, corner, end]
 
     def _find_key_connection_point(self, key_rect, from_point):
         """Find the closest point on the key edge to connect to."""
@@ -230,16 +149,4 @@ class ConnectorRouter:
         for pt in points[1:]:
             if GeometryUtils.distance(pt, deduped[-1]) > 0.01:
                 deduped.append(pt)
-        if len(deduped) < 3:
-            return deduped
-        simplified = [deduped[0]]
-        for i in range(1, len(deduped) - 1):
-            prev = simplified[-1]
-            curr = deduped[i]
-            next_pt = deduped[i + 1]
-            same_x = abs(prev.x() - curr.x()) < 0.01 and abs(curr.x() - next_pt.x()) < 0.01
-            same_y = abs(prev.y() - curr.y()) < 0.01 and abs(curr.y() - next_pt.y()) < 0.01
-            if not (same_x or same_y):
-                simplified.append(curr)
-        simplified.append(deduped[-1])
-        return simplified
+        return deduped
