@@ -29,6 +29,7 @@ class WaypointGraph:
         self._add_row_column_waypoints(seen)
         self._add_column_row_waypoints(seen)
         self._add_perimeter_waypoints(seen)
+        self._connect_waypoints()
 
     def _find_gap_points(self, rect1, rect2, threshold):
         """Find waypoints in the gap between two adjacent keys."""
@@ -177,3 +178,83 @@ class WaypointGraph:
             candidates = [wp for wp in candidates if wp.waypoint_type == kind]
         sorted_wps = sorted(candidates, key=lambda w: w.distance_to(point))
         return sorted_wps[:count]
+
+    def _connect_waypoints(self):
+        """Connect waypoints along the same gap lines."""
+        self._connect_horizontal_lines()
+        self._connect_vertical_lines()
+
+    def _connect_horizontal_lines(self):
+        """Connect waypoints on the same horizontal line."""
+        tolerance = self.avg_key_size * 0.15
+        groups = {}
+        for wp in self.waypoints:
+            y_key = round(wp.y / tolerance) * tolerance
+            if y_key not in groups:
+                groups[y_key] = []
+            groups[y_key].append(wp)
+        for wps in groups.values():
+            if len(wps) < 2:
+                continue
+            sorted_wps = sorted(wps, key=lambda w: w.x)
+            for i in range(len(sorted_wps) - 1):
+                w1, w2 = sorted_wps[i], sorted_wps[i + 1]
+                if not self._segment_blocked(w1.position, w2.position):
+                    w1.add_neighbor(w2)
+                    w2.add_neighbor(w1)
+
+    def _connect_vertical_lines(self):
+        """Connect waypoints on the same vertical line."""
+        tolerance = self.avg_key_size * 0.15
+        groups = {}
+        for wp in self.waypoints:
+            x_key = round(wp.x / tolerance) * tolerance
+            if x_key not in groups:
+                groups[x_key] = []
+            groups[x_key].append(wp)
+        for wps in groups.values():
+            if len(wps) < 2:
+                continue
+            sorted_wps = sorted(wps, key=lambda w: w.y)
+            for i in range(len(sorted_wps) - 1):
+                w1, w2 = sorted_wps[i], sorted_wps[i + 1]
+                if not self._segment_blocked(w1.position, w2.position):
+                    w1.add_neighbor(w2)
+                    w2.add_neighbor(w1)
+
+    def _segment_blocked(self, p1, p2):
+        """Check if segment between two points is blocked by a key."""
+        margin = self.avg_key_size * 0.05
+        for rect in self.key_rects:
+            inflated = rect.adjusted(-margin, -margin, margin, margin)
+            if self._line_intersects_rect(p1, p2, inflated):
+                return True
+        return False
+
+    def _line_intersects_rect(self, p1, p2, rect):
+        """Check if line segment intersects rectangle interior."""
+        if rect.contains(p1) or rect.contains(p2):
+            return True
+        edges = [
+            (QPointF(rect.left(), rect.top()), QPointF(rect.right(), rect.top())),
+            (QPointF(rect.right(), rect.top()), QPointF(rect.right(), rect.bottom())),
+            (QPointF(rect.right(), rect.bottom()), QPointF(rect.left(), rect.bottom())),
+            (QPointF(rect.left(), rect.bottom()), QPointF(rect.left(), rect.top())),
+        ]
+        for e1, e2 in edges:
+            if self._segments_intersect(p1, p2, e1, e2):
+                return True
+        return False
+
+    def _segments_intersect(self, p1, p2, p3, p4):
+        """Check if two line segments intersect."""
+        def cross(o, a, b):
+            return (a.x() - o.x()) * (b.y() - o.y()) - (a.y() - o.y()) * (b.x() - o.x())
+        d1 = cross(p3, p4, p1)
+        d2 = cross(p3, p4, p2)
+        d3 = cross(p1, p2, p3)
+        d4 = cross(p1, p2, p4)
+        if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+           ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+            return True
+        return False
