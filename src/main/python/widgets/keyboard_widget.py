@@ -449,7 +449,12 @@ class KeyboardWidget(QWidget):
         )
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
-        self.combo_entries = combo_entries or []
+        new_combo_entries = combo_entries or []
+        # Only invalidate cache if combo entries actually changed
+        if new_combo_entries == self.combo_entries and widget_keycodes == getattr(self, '_last_widget_keycodes', None):
+            return
+        self._last_widget_keycodes = widget_keycodes
+        self.combo_entries = new_combo_entries
         self.combo_entries_numeric = []
         for idx, entry in enumerate(self.combo_entries):
             if not entry:
