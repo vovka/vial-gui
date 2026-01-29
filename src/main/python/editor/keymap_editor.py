@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import json
 
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QMessageBox, QWidget
+from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QVBoxLayout, QMessageBox, QWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSettings
 
 from any_keycode_dialog import AnyKeycodeDialog
@@ -38,6 +38,11 @@ class KeymapEditor(BasicEditor):
         layout_labels_container = QHBoxLayout()
         layout_labels_container.addWidget(layer_label)
         layout_labels_container.addLayout(self.layout_layers)
+        self.combo_debug_checkbox = QCheckBox(tr("KeymapEditor", "Combo debug"))
+        self.combo_debug_checkbox.setChecked(False)
+        self.combo_debug_checkbox.setVisible(False)
+        self.combo_debug_checkbox.toggled.connect(self.on_combo_debug_toggled)
+        layout_labels_container.addWidget(self.combo_debug_checkbox)
         layout_labels_container.addStretch()
         layout_labels_container.addLayout(self.layout_size)
 
@@ -92,6 +97,12 @@ class KeymapEditor(BasicEditor):
 
     def set_combos_preview_enabled(self, enabled):
         self.container.set_show_combos(enabled)
+        self.combo_debug_checkbox.setVisible(enabled)
+        if not enabled:
+            self.combo_debug_checkbox.setChecked(False)
+
+    def on_combo_debug_toggled(self, enabled):
+        self.container.set_show_combo_debug(enabled)
 
     def activate(self):
         for action in self.layer_actions:
