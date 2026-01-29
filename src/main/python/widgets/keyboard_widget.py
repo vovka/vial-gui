@@ -433,6 +433,188 @@ class KeyboardWidget(QWidget):
                     for w in self.widgets)
         return total / len(self.widgets)
 
+    def _gap_intersections(self, key_rects, avg_key_size):
+        if not key_rects or avg_key_size <= 0:
+            return []
+        vertical_lines = []
+        horizontal_lines = []
+        epsilon = avg_key_size * 0.06
+        gap_margin = avg_key_size * 0.12
+        shrink = avg_key_size * 0.08
+
+        for rect in key_rects:
+            nearest_right_left = None
+            right_candidates = []
+            nearest_left_right = None
+            left_candidates = []
+            for other in key_rects:
+                if other is rect or other.left() <= rect.right():
+                    continue
+                overlap_top = max(rect.top(), other.top())
+                overlap_bottom = min(rect.bottom(), other.bottom())
+                if overlap_top >= overlap_bottom:
+                    continue
+                overlap_top -= gap_margin
+                overlap_bottom += gap_margin
+                if nearest_right_left is None or other.left() < (nearest_right_left - epsilon):
+                    nearest_right_left = other.left()
+                    right_candidates = [(other, overlap_top, overlap_bottom)]
+                elif abs(other.left() - nearest_right_left) <= epsilon:
+                    right_candidates.append((other, overlap_top, overlap_bottom))
+            for other, overlap_top, overlap_bottom in right_candidates:
+                gap_x = (rect.right() + other.left()) / 2
+                vertical_lines.append((gap_x, overlap_top, overlap_bottom))
+
+            for other in key_rects:
+                if other is rect or other.right() >= rect.left():
+                    continue
+                overlap_top = max(rect.top(), other.top())
+                overlap_bottom = min(rect.bottom(), other.bottom())
+                if overlap_top >= overlap_bottom:
+                    continue
+                overlap_top -= gap_margin
+                overlap_bottom += gap_margin
+                if nearest_left_right is None or other.right() > (nearest_left_right + epsilon):
+                    nearest_left_right = other.right()
+                    left_candidates = [(other, overlap_top, overlap_bottom)]
+                elif abs(other.right() - nearest_left_right) <= epsilon:
+                    left_candidates.append((other, overlap_top, overlap_bottom))
+            for other, overlap_top, overlap_bottom in left_candidates:
+                gap_x = (other.right() + rect.left()) / 2
+                vertical_lines.append((gap_x, overlap_top, overlap_bottom))
+
+            if not right_candidates:
+                vertical_lines.append((
+                    rect.right() + gap_margin,
+                    rect.top() - gap_margin,
+                    rect.bottom() + gap_margin
+                ))
+            if not left_candidates:
+                vertical_lines.append((
+                    rect.left() - gap_margin,
+                    rect.top() - gap_margin,
+                    rect.bottom() + gap_margin
+                ))
+
+            nearest_bottom_top = None
+            bottom_candidates = []
+            nearest_top_bottom = None
+            top_candidates = []
+            for other in key_rects:
+                if other is rect or other.top() <= rect.bottom():
+                    continue
+                overlap_left = max(rect.left(), other.left())
+                overlap_right = min(rect.right(), other.right())
+                if overlap_left >= overlap_right:
+                    continue
+                overlap_left -= gap_margin
+                overlap_right += gap_margin
+                if nearest_bottom_top is None or other.top() < (nearest_bottom_top - epsilon):
+                    nearest_bottom_top = other.top()
+                    bottom_candidates = [(other, overlap_left, overlap_right)]
+                elif abs(other.top() - nearest_bottom_top) <= epsilon:
+                    bottom_candidates.append((other, overlap_left, overlap_right))
+            for other, overlap_left, overlap_right in bottom_candidates:
+                gap_y = (rect.bottom() + other.top()) / 2
+                horizontal_lines.append((gap_y, overlap_left, overlap_right))
+
+            for other in key_rects:
+                if other is rect or other.bottom() >= rect.top():
+                    continue
+                overlap_left = max(rect.left(), other.left())
+                overlap_right = min(rect.right(), other.right())
+                if overlap_left >= overlap_right:
+                    continue
+                overlap_left -= gap_margin
+                overlap_right += gap_margin
+                if nearest_top_bottom is None or other.bottom() > (nearest_top_bottom + epsilon):
+                    nearest_top_bottom = other.bottom()
+                    top_candidates = [(other, overlap_left, overlap_right)]
+                elif abs(other.bottom() - nearest_top_bottom) <= epsilon:
+                    top_candidates.append((other, overlap_left, overlap_right))
+            for other, overlap_left, overlap_right in top_candidates:
+                gap_y = (other.bottom() + rect.top()) / 2
+                horizontal_lines.append((gap_y, overlap_left, overlap_right))
+
+            if not bottom_candidates:
+                horizontal_lines.append((
+                    rect.bottom() + gap_margin,
+                    rect.left() - gap_margin,
+                    rect.right() + gap_margin
+                ))
+            if not top_candidates:
+                horizontal_lines.append((
+                    rect.top() - gap_margin,
+                    rect.left() - gap_margin,
+                    rect.right() + gap_margin
+                ))
+
+        def _dedupe(segments, precision=2):
+            seen = set()
+            result = []
+            for seg in segments:
+                key = tuple(round(value, precision) for value in seg)
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(seg)
+            return result
+
+        vertical_lines = _dedupe(vertical_lines)
+        horizontal_lines = _dedupe(horizontal_lines)
+
+        intersections = []
+        seen = set()
+        def _shrunk_rect(rect):
+            if shrink <= 0:
+                return rect
+            shrunk = rect.adjusted(shrink, shrink, -shrink, -shrink)
+            if shrunk.width() <= 1 or shrunk.height() <= 1:
+                return rect
+            return shrunk
+
+        shrunk_rects = [_shrunk_rect(rect) for rect in key_rects]
+
+        for gap_x, y_min, y_max in vertical_lines:
+            for gap_y, x_min, x_max in horizontal_lines:
+                if (x_min - epsilon) <= gap_x <= (x_max + epsilon) and (y_min - epsilon) <= gap_y <= (y_max + epsilon):
+                    point = QPointF(gap_x, gap_y)
+                    if any(rect.contains(point) for rect in shrunk_rects):
+                        continue
+                    key = (round(point.x(), 1), round(point.y(), 1))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    intersections.append(point)
+        return intersections
+
+    def _debug_key_rects(self):
+        rects = []
+        for widget in self.widgets:
+            rects.append(QPolygonF(widget.bbox).boundingRect())
+            if widget.has2:
+                rects.append(QPolygonF(widget.bbox2).boundingRect())
+        return rects
+
+    def _draw_gap_intersections(self, painter):
+        key_rects = self._debug_key_rects()
+        avg_key_size = self._compute_avg_key_size()
+        intersections = self._gap_intersections(key_rects, avg_key_size)
+        if not intersections:
+            return
+        painter.save()
+        painter.scale(self.scale, self.scale)
+        painter.setRenderHint(QPainter.Antialiasing)
+        radius = max(2.5, avg_key_size * 0.08)
+        pen = QPen(QColor(120, 120, 120, 200))
+        pen.setWidthF(1.0)
+        brush = QBrush(QColor(160, 160, 160, 120))
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        for point in intersections:
+            painter.drawEllipse(point, radius, radius)
+        painter.restore()
+
     def _generate_free_slots(self):
         """Generate free slot positions based on current key layout."""
         if not self.widgets:
@@ -585,10 +767,9 @@ class KeyboardWidget(QWidget):
             slot = assignment["slot"]
             connector_paths = []
             if not info.adjacent:
-                rect_center = rect.center()
                 for widget in info.combo_widgets:
                     key_rect = widget.polygon.boundingRect()
-                    points = connector_router.route(rect_center, key_rect)
+                    points = connector_router.route(rect.center(), key_rect)
                     connector_paths.append(path_renderer.create_path(points))
                     route_count += 1
             cache.append({
@@ -701,6 +882,8 @@ class KeyboardWidget(QWidget):
         regular_pen = qp.pen()
         regular_pen.setColor(QApplication.palette().color(QPalette.ButtonText))
         qp.setPen(regular_pen)
+        outline_pen = QPen(QColor(140, 140, 140, 140))
+        outline_pen.setWidthF(0.8)
 
         background_brush = QBrush()
         background_brush.setColor(QApplication.palette().color(QPalette.Button))
@@ -767,6 +950,14 @@ class KeyboardWidget(QWidget):
             )
             qp.setBrush(bg_brush)
             qp.drawPath(key.background_draw_path)
+
+            if self.show_combo_debug:
+                # draw key outline rectangle (debug layer)
+                qp.setPen(outline_pen)
+                qp.setBrush(Qt.NoBrush)
+                qp.drawRect(key.rect)
+                if key.has2:
+                    qp.drawRect(key.rect2)
 
             # draw keycap foreground
             qp.setPen(Qt.NoPen)
@@ -862,6 +1053,9 @@ class KeyboardWidget(QWidget):
 
         if self.show_combos:
             self._draw_combos(qp)
+
+        if self.show_combo_debug:
+            self._draw_gap_intersections(qp)
 
         qp.end()
 
