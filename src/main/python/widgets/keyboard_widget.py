@@ -443,8 +443,10 @@ class KeyboardWidget(QWidget):
         shrink = avg_key_size * 0.08
 
         for rect in key_rects:
-            min_left = None
-            candidates = []
+            nearest_right_left = None
+            right_candidates = []
+            nearest_left_right = None
+            left_candidates = []
             for other in key_rects:
                 if other is rect or other.left() <= rect.right():
                     continue
@@ -454,17 +456,50 @@ class KeyboardWidget(QWidget):
                     continue
                 overlap_top -= gap_margin
                 overlap_bottom += gap_margin
-                if min_left is None or other.left() < (min_left - epsilon):
-                    min_left = other.left()
-                    candidates = [(other, overlap_top, overlap_bottom)]
-                elif abs(other.left() - min_left) <= epsilon:
-                    candidates.append((other, overlap_top, overlap_bottom))
-            for other, overlap_top, overlap_bottom in candidates:
+                if nearest_right_left is None or other.left() < (nearest_right_left - epsilon):
+                    nearest_right_left = other.left()
+                    right_candidates = [(other, overlap_top, overlap_bottom)]
+                elif abs(other.left() - nearest_right_left) <= epsilon:
+                    right_candidates.append((other, overlap_top, overlap_bottom))
+            for other, overlap_top, overlap_bottom in right_candidates:
                 gap_x = (rect.right() + other.left()) / 2
                 vertical_lines.append((gap_x, overlap_top, overlap_bottom))
 
-            min_top = None
-            candidates = []
+            for other in key_rects:
+                if other is rect or other.right() >= rect.left():
+                    continue
+                overlap_top = max(rect.top(), other.top())
+                overlap_bottom = min(rect.bottom(), other.bottom())
+                if overlap_top >= overlap_bottom:
+                    continue
+                overlap_top -= gap_margin
+                overlap_bottom += gap_margin
+                if nearest_left_right is None or other.right() > (nearest_left_right + epsilon):
+                    nearest_left_right = other.right()
+                    left_candidates = [(other, overlap_top, overlap_bottom)]
+                elif abs(other.right() - nearest_left_right) <= epsilon:
+                    left_candidates.append((other, overlap_top, overlap_bottom))
+            for other, overlap_top, overlap_bottom in left_candidates:
+                gap_x = (other.right() + rect.left()) / 2
+                vertical_lines.append((gap_x, overlap_top, overlap_bottom))
+
+            if not right_candidates:
+                vertical_lines.append((
+                    rect.right() + gap_margin,
+                    rect.top() - gap_margin,
+                    rect.bottom() + gap_margin
+                ))
+            if not left_candidates:
+                vertical_lines.append((
+                    rect.left() - gap_margin,
+                    rect.top() - gap_margin,
+                    rect.bottom() + gap_margin
+                ))
+
+            nearest_bottom_top = None
+            bottom_candidates = []
+            nearest_top_bottom = None
+            top_candidates = []
             for other in key_rects:
                 if other is rect or other.top() <= rect.bottom():
                     continue
@@ -474,14 +509,45 @@ class KeyboardWidget(QWidget):
                     continue
                 overlap_left -= gap_margin
                 overlap_right += gap_margin
-                if min_top is None or other.top() < (min_top - epsilon):
-                    min_top = other.top()
-                    candidates = [(other, overlap_left, overlap_right)]
-                elif abs(other.top() - min_top) <= epsilon:
-                    candidates.append((other, overlap_left, overlap_right))
-            for other, overlap_left, overlap_right in candidates:
+                if nearest_bottom_top is None or other.top() < (nearest_bottom_top - epsilon):
+                    nearest_bottom_top = other.top()
+                    bottom_candidates = [(other, overlap_left, overlap_right)]
+                elif abs(other.top() - nearest_bottom_top) <= epsilon:
+                    bottom_candidates.append((other, overlap_left, overlap_right))
+            for other, overlap_left, overlap_right in bottom_candidates:
                 gap_y = (rect.bottom() + other.top()) / 2
                 horizontal_lines.append((gap_y, overlap_left, overlap_right))
+
+            for other in key_rects:
+                if other is rect or other.bottom() >= rect.top():
+                    continue
+                overlap_left = max(rect.left(), other.left())
+                overlap_right = min(rect.right(), other.right())
+                if overlap_left >= overlap_right:
+                    continue
+                overlap_left -= gap_margin
+                overlap_right += gap_margin
+                if nearest_top_bottom is None or other.bottom() > (nearest_top_bottom + epsilon):
+                    nearest_top_bottom = other.bottom()
+                    top_candidates = [(other, overlap_left, overlap_right)]
+                elif abs(other.bottom() - nearest_top_bottom) <= epsilon:
+                    top_candidates.append((other, overlap_left, overlap_right))
+            for other, overlap_left, overlap_right in top_candidates:
+                gap_y = (other.bottom() + rect.top()) / 2
+                horizontal_lines.append((gap_y, overlap_left, overlap_right))
+
+            if not bottom_candidates:
+                horizontal_lines.append((
+                    rect.bottom() + gap_margin,
+                    rect.left() - gap_margin,
+                    rect.right() + gap_margin
+                ))
+            if not top_candidates:
+                horizontal_lines.append((
+                    rect.top() - gap_margin,
+                    rect.left() - gap_margin,
+                    rect.right() + gap_margin
+                ))
 
         def _dedupe(segments, precision=2):
             seen = set()
