@@ -443,23 +443,27 @@ class KeyboardWidget(QWidget):
             if len(row_rects) < 2:
                 continue
             sorted_rects = sorted(row_rects, key=lambda r: r.left())
-            row_top = min(r.top() for r in row_rects)
-            row_bottom = max(r.bottom() for r in row_rects)
             for i in range(len(sorted_rects) - 1):
                 r1, r2 = sorted_rects[i], sorted_rects[i + 1]
+                overlap_top = max(r1.top(), r2.top())
+                overlap_bottom = min(r1.bottom(), r2.bottom())
+                if overlap_top >= overlap_bottom:
+                    continue
                 gap_x = (r1.right() + r2.left()) / 2
-                vertical_lines.append((gap_x, row_top, row_bottom))
+                vertical_lines.append((gap_x, overlap_top, overlap_bottom))
         column_groups = self._group_rects_by_column(key_rects, avg_key_size)
         for column_rects in column_groups.values():
             if len(column_rects) < 2:
                 continue
             sorted_rects = sorted(column_rects, key=lambda r: r.top())
-            col_left = min(r.left() for r in column_rects)
-            col_right = max(r.right() for r in column_rects)
             for i in range(len(sorted_rects) - 1):
                 r1, r2 = sorted_rects[i], sorted_rects[i + 1]
+                overlap_left = max(r1.left(), r2.left())
+                overlap_right = min(r1.right(), r2.right())
+                if overlap_left >= overlap_right:
+                    continue
                 gap_y = (r1.bottom() + r2.top()) / 2
-                horizontal_lines.append((gap_y, col_left, col_right))
+                horizontal_lines.append((gap_y, overlap_left, overlap_right))
         intersections = []
         seen = set()
         for gap_x, y_min, y_max in vertical_lines:
@@ -477,7 +481,7 @@ class KeyboardWidget(QWidget):
 
     def _group_rects_by_row(self, key_rects, avg_key_size):
         rows = {}
-        tolerance = avg_key_size * 0.3
+        tolerance = avg_key_size * 0.4
         for rect in key_rects:
             cy = rect.center().y()
             found = False
@@ -492,7 +496,7 @@ class KeyboardWidget(QWidget):
 
     def _group_rects_by_column(self, key_rects, avg_key_size):
         columns = {}
-        tolerance = avg_key_size * 0.3
+        tolerance = avg_key_size * 0.4
         for rect in key_rects:
             cx = rect.center().x()
             found = False
