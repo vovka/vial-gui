@@ -13,6 +13,7 @@ from keycodes.keycodes import Keycode
 from util import KeycodeDisplay
 from themes import Theme
 from widgets.dendron_renderer import DendronRenderer
+from widgets.gap_graph import GapRouter, GapGraphRenderer
 
 
 def _interpolate_color(color1, color2, factor):
@@ -303,6 +304,9 @@ class KeyboardWidget(QWidget):
         self.combo_entries_numeric = []
         self.combo_widget_keycodes_numeric = {}
         self.show_combos = True
+        self.show_gap_graph = True
+        self.gap_router = None
+        self.gap_graph_renderer = GapGraphRenderer(node_radius=3.0)
 
     def set_keys(self, keys, encoders):
         self.common_widgets = []
@@ -382,8 +386,20 @@ class KeyboardWidget(QWidget):
         self.width = round(max_w + 2 * self.padding)
         self.height = round(max_h + 2 * self.padding)
 
+        self._build_gap_router()
+
         self.update()
         self.updateGeometry()
+
+    def _build_gap_router(self):
+        """Build the gap router from current widget layout."""
+        if not self.widgets:
+            self.gap_router = None
+            return
+        key_rects = [w.polygon.boundingRect() for w in self.widgets]
+        total_size = sum(w.size for w in self.widgets)
+        avg_size = total_size / len(self.widgets)
+        self.gap_router = GapRouter(key_rects, avg_size)
 
     def set_combo_entries(self, combo_entries, widget_keycodes):
         self.combo_entries = combo_entries or []
@@ -411,6 +427,12 @@ class KeyboardWidget(QWidget):
         enabled = bool(enabled)
         if self.show_combos != enabled:
             self.show_combos = enabled
+            self.update()
+
+    def set_show_gap_graph(self, enabled):
+        enabled = bool(enabled)
+        if self.show_gap_graph != enabled:
+            self.show_gap_graph = enabled
             self.update()
 
     def _get_key_brush(self, key, normal_brush, on_brush, pressed_brush):
@@ -493,6 +515,9 @@ class KeyboardWidget(QWidget):
         qp.save()
         qp.scale(self.scale, self.scale)
         qp.setRenderHint(QPainter.Antialiasing)
+
+        if self.show_gap_graph and self.gap_router:
+            self.gap_graph_renderer.render(qp, self.gap_router.get_graph(), scale=1.0)
 
         placed_rects = []
         key_rects = [widget.polygon.boundingRect() for widget in self.widgets]
@@ -624,12 +649,16 @@ class KeyboardWidget(QWidget):
             if not adjacent:
                 qp.setPen(line_pen)
                 qp.setBrush(Qt.NoBrush)
-                renderer = DendronRenderer(bend_radius=avg_size * 0.15)
                 for widget in combo_widgets:
                     key_rect = widget.polygon.boundingRect()
-                    key_point = renderer.find_closest_corner_point(key_rect, rect_center)
-                    path = renderer.create_dendron_path(rect_center, key_point, key_rect)
-                    qp.drawPath(path)
+                    if self.gap_router:
+                        path = self.gap_router.route(key_rect, rect_center)
+                        self.gap_graph_renderer.render_path(qp, path, scale=1.0)
+                    else:
+                        renderer = DendronRenderer(bend_radius=avg_size * 0.15)
+                        key_point = renderer.find_closest_corner_point(key_rect, rect_center)
+                        qp_path = renderer.create_dendron_path(rect_center, key_point, key_rect)
+                        qp.drawPath(qp_path)
 
             qp.setPen(border_pen)
             qp.setBrush(fill_brush)
