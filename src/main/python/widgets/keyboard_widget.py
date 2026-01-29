@@ -439,6 +439,7 @@ class KeyboardWidget(QWidget):
         vertical_lines = []
         horizontal_lines = []
         row_groups = self._group_rects_by_row(key_rects, avg_key_size)
+        margin = avg_key_size * 0.12
         for row_rects in row_groups.values():
             if len(row_rects) < 2:
                 continue
@@ -449,6 +450,8 @@ class KeyboardWidget(QWidget):
                 overlap_bottom = min(r1.bottom(), r2.bottom())
                 if overlap_top >= overlap_bottom:
                     continue
+                overlap_top -= margin
+                overlap_bottom += margin
                 gap_x = (r1.right() + r2.left()) / 2
                 vertical_lines.append((gap_x, overlap_top, overlap_bottom))
         column_groups = self._group_rects_by_column(key_rects, avg_key_size)
@@ -462,13 +465,15 @@ class KeyboardWidget(QWidget):
                 overlap_right = min(r1.right(), r2.right())
                 if overlap_left >= overlap_right:
                     continue
+                overlap_left -= margin
+                overlap_right += margin
                 gap_y = (r1.bottom() + r2.top()) / 2
                 horizontal_lines.append((gap_y, overlap_left, overlap_right))
         intersections = []
         seen = set()
         for gap_x, y_min, y_max in vertical_lines:
             for gap_y, x_min, x_max in horizontal_lines:
-                if x_min <= gap_x <= x_max and y_min <= gap_y <= y_max:
+                if (x_min - margin) <= gap_x <= (x_max + margin) and (y_min - margin) <= gap_y <= (y_max + margin):
                     point = QPointF(gap_x, gap_y)
                     if any(rect.contains(point) for rect in key_rects):
                         continue
