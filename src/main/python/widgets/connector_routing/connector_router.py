@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import heapq
 from PyQt5.QtCore import QPointF
 from widgets.connector_routing.geometry_utils import GeometryUtils
 
@@ -24,120 +23,105 @@ class ConnectorRouter:
 
     def _find_path_through_intersections(self, start, end, target_key_rect):
         """Find path from start to end through gap intersection points."""
-        nearby_start = self._find_nearby_intersections(start, count=6)
-        nearby_end = self._find_nearby_intersections(end, count=6)
-        best_path = self._build_simple_path(start, end, target_key_rect)
-        best_score = self._path_score(best_path, target_key_rect)
-        for wp_start in nearby_start:
-            for wp_end in nearby_end:
-                path = self._build_path_via_waypoints(start, end, wp_start, wp_end)
-                score = self._path_score(path, target_key_rect)
-                if score < best_score:
-                    best_score = score
-                    best_path = path
+        simple_path = self._build_simple_path(start, end, target_key_rect)
+        simple_crossings = self._path_cost(simple_path, target_key_rect)
+        waypoint_paths = []
+        nearby_start = self._find_nearby_intersections(start, count=8)
+        nearby_end = self._find_nearby_intersections(end, count=8)
         for wp in nearby_start + nearby_end:
             path = self._build_path_via_single_waypoint(start, end, wp)
-            score = self._path_score(path, target_key_rect)
-            if score < best_score:
-                best_score = score
-                best_path = path
+            crossings = self._path_cost(path, target_key_rect)
+            if crossings <= simple_crossings:
+                waypoint_paths.append((path, crossings, self._path_length(path)))
+        for wp_start in nearby_start[:4]:
+            for wp_end in nearby_end[:4]:
+                path = self._build_path_via_waypoints(start, end, wp_start, wp_end)
+                crossings = self._path_cost(path, target_key_rect)
+                if crossings <= simple_crossings:
+                    waypoint_paths.append((path, crossings, self._path_length(path)))
         chain_path = self._find_chain_path(start, end, target_key_rect)
         if chain_path:
-            chain_score = self._path_score(chain_path, target_key_rect)
-            if chain_score < best_score:
-                best_path = chain_path
-        return best_path
+            crossings = self._path_cost(chain_path, target_key_rect)
+            if crossings <= simple_crossings:
+                waypoint_paths.append((chain_path, crossings, self._path_length(chain_path)))
+        if waypoint_paths:
+            waypoint_paths.sort(key=lambda x: (x[1], x[2]))
+            return waypoint_paths[0][0]
+        return simple_path
 
     def _find_chain_path(self, start, end, target_key_rect):
         """Find a path by chaining through aligned intersections."""
         if not self.gap_intersections:
             return None
-        nearby = self._find_nearby_intersections(start, count=8)
-        if not nearby:
+        nearby_start = self._find_nearby_intersections(start, count=6)
+        nearby_end = self._find_nearby_intersections(end, count=6)
+        if not nearby_start:
             return None
         best_chain = None
         best_score = None
-        for first_wp in nearby:
-            chain = self._extend_chain_toward(first_wp, end, max_depth=4)
-            if not chain:
-                continue
-            path = self._build_orthogonal_chain(start, chain, end)
-            score = self._path_score(path, target_key_rect)
-            if best_score is None or score < best_score:
-                best_score = score
-                best_chain = path
+        for first_wp in nearby_start:
+            for last_wp in nearby_end:
+                chain = self._find_chain_between(first_wp, last_wp, max_depth=5)
+                if not chain:
+                    continue
+                path = self._build_orthogonal_chain(start, chain, end)
+                score = self._path_score(path, target_key_rect)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_chain = path
         return best_chain
 
-    def _extend_chain_toward(self, start_wp, target, max_depth):
-        """Extend a chain of waypoints toward the target."""
+    def _find_chain_between(self, start_wp, end_wp, max_depth):
+        """Find a chain of waypoints from start_wp to end_wp."""
+        if self._point_key(start_wp) == self._point_key(end_wp):
+            return [start_wp]
         chain = [start_wp]
         current = start_wp
         visited = {self._point_key(start_wp)}
+        target = end_wp
         for _ in range(max_depth):
-            aligned = self._find_aligned_intersections(current)
-            if not aligned:
+            if GeometryUtils.distance(current, target) < self._tolerance * 2:
+                chain.append(target)
                 break
-            best_next = None
-            best_dist = None
-            for wp in aligned:
-                key = self._point_key(wp)
-                if key in visited:
-                    continue
-                dist = GeometryUtils.distance(wp, target)
-                if best_dist is None or dist < best_dist:
-                    best_dist = dist
-                    best_next = wp
+            best_next = self._find_best_next_waypoint(current, target, visited)
             if best_next is None:
-                break
-            current_dist = GeometryUtils.distance(current, target)
-            if best_dist >= current_dist - self._tolerance:
                 break
             chain.append(best_next)
             visited.add(self._point_key(best_next))
             current = best_next
-        return chain
+        return chain if len(chain) > 1 else None
+
+    def _find_best_next_waypoint(self, current, target, visited):
+        """Find the best next waypoint moving toward target."""
+        candidates = []
+        for wp in self.gap_intersections:
+            key = self._point_key(wp)
+            if key in visited:
+                continue
+            if not self._is_good_step(current, wp, target):
+                continue
+            dist_to_target = GeometryUtils.distance(wp, target)
+            candidates.append((wp, dist_to_target))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: x[1])
+        return candidates[0][0]
+
+    def _is_good_step(self, current, candidate, target):
+        """Check if moving to candidate is a good step toward target."""
+        current_dist = GeometryUtils.distance(current, target)
+        candidate_dist = GeometryUtils.distance(candidate, target)
+        return candidate_dist < current_dist
 
     def _build_orthogonal_chain(self, start, chain, end):
         """Build orthogonal path from start through chain waypoints to end."""
         if not chain:
             return self._build_simple_path(start, end, None)
         path = [start]
-        current = start
         for wp in chain:
-            corner = self._orthogonal_corner(current, wp)
-            if corner and GeometryUtils.distance(corner, current) > 0.5:
-                path.append(corner)
             path.append(wp)
-            current = wp
-        corner = self._orthogonal_corner(current, end)
-        if corner and GeometryUtils.distance(corner, current) > 0.5:
-            path.append(corner)
         path.append(end)
         return path
-
-    def _orthogonal_corner(self, p1, p2):
-        """Find corner point for orthogonal path between two points."""
-        dx = abs(p1.x() - p2.x())
-        dy = abs(p1.y() - p2.y())
-        if dx < self._tolerance:
-            return None
-        if dy < self._tolerance:
-            return None
-        return QPointF(p2.x(), p1.y())
-
-    def _find_aligned_intersections(self, point):
-        """Find intersection points aligned horizontally or vertically."""
-        aligned = []
-        for wp in self.gap_intersections:
-            if self._is_aligned(point, wp):
-                aligned.append(wp)
-        return aligned
-
-    def _is_aligned(self, p1, p2):
-        """Check if two points are aligned horizontally or vertically."""
-        dx = abs(p1.x() - p2.x())
-        dy = abs(p1.y() - p2.y())
-        return dx < self._tolerance or dy < self._tolerance
 
     def _point_key(self, p):
         """Create a hashable key for a point."""
@@ -157,33 +141,11 @@ class ConnectorRouter:
         """Build path: start -> wp_start -> wp_end -> end."""
         if self._point_key(wp_start) == self._point_key(wp_end):
             return self._build_path_via_single_waypoint(start, end, wp_start)
-        path = [start]
-        c1 = self._orthogonal_corner(start, wp_start)
-        if c1:
-            path.append(c1)
-        path.append(wp_start)
-        c2 = self._orthogonal_corner(wp_start, wp_end)
-        if c2:
-            path.append(c2)
-        path.append(wp_end)
-        c3 = self._orthogonal_corner(wp_end, end)
-        if c3:
-            path.append(c3)
-        path.append(end)
-        return path
+        return [start, wp_start, wp_end, end]
 
     def _build_path_via_single_waypoint(self, start, end, waypoint):
         """Build path: start -> waypoint -> end."""
-        path = [start]
-        c1 = self._orthogonal_corner(start, waypoint)
-        if c1:
-            path.append(c1)
-        path.append(waypoint)
-        c2 = self._orthogonal_corner(waypoint, end)
-        if c2:
-            path.append(c2)
-        path.append(end)
-        return path
+        return [start, waypoint, end]
 
     def _build_simple_path(self, start, end, target_key_rect):
         """Build a simple L-shaped path."""
