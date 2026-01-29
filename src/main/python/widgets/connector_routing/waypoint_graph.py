@@ -29,6 +29,7 @@ class WaypointGraph:
         self._add_row_column_waypoints(seen)
         self._add_column_row_waypoints(seen)
         self._add_perimeter_waypoints(seen)
+        self._connect_waypoints()
 
     def _find_gap_points(self, rect1, rect2, threshold):
         """Find waypoints in the gap between two adjacent keys."""
@@ -177,3 +178,154 @@ class WaypointGraph:
             candidates = [wp for wp in candidates if wp.waypoint_type == kind]
         sorted_wps = sorted(candidates, key=lambda w: w.distance_to(point))
         return sorted_wps[:count]
+
+    def _connect_waypoints(self):
+        """Connect waypoints along the same gap lines only."""
+        self._connect_horizontal_lines()
+        self._connect_vertical_lines()
+        self._connect_perimeter_to_interior()
+        self._connect_components()
+
+    def _connect_horizontal_lines(self):
+        """Connect adjacent waypoints on the same horizontal line."""
+        tolerance = self.avg_key_size * 0.1
+        groups = {}
+        for wp in self.waypoints:
+            y_key = round(wp.y / tolerance) * tolerance
+            if y_key not in groups:
+                groups[y_key] = []
+            groups[y_key].append(wp)
+        for wps in groups.values():
+            if len(wps) < 2:
+                continue
+            sorted_wps = sorted(wps, key=lambda w: w.x)
+            for i in range(len(sorted_wps) - 1):
+                w1, w2 = sorted_wps[i], sorted_wps[i + 1]
+                if not self._segment_crosses_key(w1.position, w2.position):
+                    w1.add_neighbor(w2)
+                    w2.add_neighbor(w1)
+
+    def _connect_vertical_lines(self):
+        """Connect adjacent waypoints on the same vertical line."""
+        tolerance = self.avg_key_size * 0.1
+        groups = {}
+        for wp in self.waypoints:
+            x_key = round(wp.x / tolerance) * tolerance
+            if x_key not in groups:
+                groups[x_key] = []
+            groups[x_key].append(wp)
+        for wps in groups.values():
+            if len(wps) < 2:
+                continue
+            sorted_wps = sorted(wps, key=lambda w: w.y)
+            for i in range(len(sorted_wps) - 1):
+                w1, w2 = sorted_wps[i], sorted_wps[i + 1]
+                if not self._segment_crosses_key(w1.position, w2.position):
+                    w1.add_neighbor(w2)
+                    w2.add_neighbor(w1)
+
+    def _segment_crosses_key(self, p1, p2):
+        """Check if segment between two points crosses any key rectangle."""
+        margin = self.avg_key_size * 0.02
+        for rect in self.key_rects:
+            shrunk = rect.adjusted(margin, margin, -margin, -margin)
+            if self._line_intersects_rect(p1, p2, shrunk):
+                return True
+        return False
+
+    def _connect_perimeter_to_interior(self):
+        """Connect perimeter waypoints to nearest interior waypoints."""
+        perimeter_wps = [wp for wp in self.waypoints if wp.waypoint_type == "perimeter"]
+        interior_wps = [wp for wp in self.waypoints if wp.waypoint_type != "perimeter"]
+        for pwp in perimeter_wps:
+            nearest = sorted(interior_wps, key=lambda w: w.distance_to(pwp.position))[:5]
+            for iwp in nearest:
+                if not self._segment_crosses_key(pwp.position, iwp.position):
+                    pwp.add_neighbor(iwp)
+                    iwp.add_neighbor(pwp)
+                    break
+
+    def _connect_components(self):
+        """Connect disconnected graph components only if valid path exists."""
+        components = self._find_components()
+        if len(components) <= 1:
+            return
+        while len(components) > 1:
+            best_pair = None
+            best_dist = float('inf')
+            for i, comp1 in enumerate(components):
+                for comp2 in components[i + 1:]:
+                    for wp1 in comp1:
+                        for wp2 in comp2:
+                            if self._segment_crosses_key(wp1.position, wp2.position):
+                                continue
+                            dist = wp1.distance_to(wp2.position)
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_pair = (wp1, wp2, comp1, comp2)
+            if best_pair:
+                wp1, wp2, comp1, comp2 = best_pair
+                wp1.add_neighbor(wp2)
+                wp2.add_neighbor(wp1)
+                comp1.extend(comp2)
+                components.remove(comp2)
+            else:
+                break
+
+    def _find_components(self):
+        """Find all connected components in the graph."""
+        visited = set()
+        components = []
+        for wp in self.waypoints:
+            if wp in visited:
+                continue
+            component = []
+            stack = [wp]
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                component.append(current)
+                for neighbor in current.neighbors:
+                    if neighbor not in visited:
+                        stack.append(neighbor)
+            components.append(component)
+        return components
+
+    def _segment_blocked(self, p1, p2):
+        """Check if segment between two points is blocked by a key."""
+        margin = self.avg_key_size * 0.05
+        for rect in self.key_rects:
+            inflated = rect.adjusted(-margin, -margin, margin, margin)
+            if self._line_intersects_rect(p1, p2, inflated):
+                return True
+        return False
+
+    def _line_intersects_rect(self, p1, p2, rect):
+        """Check if line segment intersects rectangle interior."""
+        if rect.contains(p1) or rect.contains(p2):
+            return True
+        edges = [
+            (QPointF(rect.left(), rect.top()), QPointF(rect.right(), rect.top())),
+            (QPointF(rect.right(), rect.top()), QPointF(rect.right(), rect.bottom())),
+            (QPointF(rect.right(), rect.bottom()), QPointF(rect.left(), rect.bottom())),
+            (QPointF(rect.left(), rect.bottom()), QPointF(rect.left(), rect.top())),
+        ]
+        for e1, e2 in edges:
+            if self._segments_intersect(p1, p2, e1, e2):
+                return True
+        return False
+
+    def _segments_intersect(self, p1, p2, p3, p4):
+        """Check if two line segments intersect."""
+        def cross(o, a, b):
+            return (a.x() - o.x()) * (b.y() - o.y()) - (a.y() - o.y()) * (b.x() - o.x())
+        d1 = cross(p3, p4, p1)
+        d2 = cross(p3, p4, p2)
+        d3 = cross(p1, p2, p3)
+        d4 = cross(p1, p2, p4)
+        if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+           ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+            return True
+        return False
