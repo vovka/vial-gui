@@ -12,6 +12,7 @@ class ConnectorRouter:
         self.key_rects = key_rects
         self.avg_key_size = avg_key_size
         self.gap_intersections = gap_intersections or []
+        self._tolerance = avg_key_size * 0.3
 
     def route(self, label_center, key_rect):
         """Find shortest Manhattan path from label to key."""
@@ -22,11 +23,16 @@ class ConnectorRouter:
         return self._normalize_path(path)
 
     def _find_shortest_manhattan_path(self, start, end):
-        """A* pathfinding - pure shortest Manhattan distance."""
+        """A* pathfinding - only connect aligned nodes."""
         nodes = [start, end] + list(self.gap_intersections)
 
         def manhattan_dist(p1, p2):
             return abs(p1.x() - p2.x()) + abs(p1.y() - p2.y())
+
+        def are_aligned(p1, p2):
+            """Check if two points share X or Y coordinate (can connect directly)."""
+            return abs(p1.x() - p2.x()) < self._tolerance or \
+                   abs(p1.y() - p2.y()) < self._tolerance
 
         def node_key(p):
             return (round(p.x(), 1), round(p.y(), 1))
@@ -54,14 +60,16 @@ class ConnectorRouter:
                     current_key, current = came_from[current_key]
                     path.append(current)
                 path.reverse()
-                return self._make_orthogonal(path)
+                return path
 
+            # Only connect to ALIGNED nodes (same X or same Y)
             for neighbor in nodes:
                 neighbor_key = node_key(neighbor)
                 if neighbor_key == current_key or neighbor_key in visited:
                     continue
+                if not are_aligned(current, neighbor):
+                    continue
 
-                # Pure Manhattan distance cost
                 cost = manhattan_dist(current, neighbor)
                 tentative_g = g_score[current_key] + cost
 
@@ -72,20 +80,8 @@ class ConnectorRouter:
                     counter += 1
                     heapq.heappush(open_set, (f_score, counter, neighbor_key, neighbor))
 
+        # No path found through intersections, fall back to simple path
         return self._build_simple_path(start, end)
-
-    def _make_orthogonal(self, path):
-        """Convert path to orthogonal segments by adding corner points."""
-        if len(path) < 2:
-            return path
-        result = [path[0]]
-        for i in range(1, len(path)):
-            prev = result[-1]
-            curr = path[i]
-            if abs(prev.x() - curr.x()) > 0.1 and abs(prev.y() - curr.y()) > 0.1:
-                result.append(QPointF(curr.x(), prev.y()))
-            result.append(curr)
-        return result
 
     def _build_simple_path(self, start, end):
         """Build a simple L-shaped path."""
