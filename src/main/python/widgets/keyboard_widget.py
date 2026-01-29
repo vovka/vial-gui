@@ -605,7 +605,7 @@ class KeyboardWidget(QWidget):
                 intersections.append(point)
 
         deduped = []
-        tolerance = max(1.0, gap_margin * 0.75)
+        tolerance = max(1.0, avg_key_size * 0.04)
         for point in intersections:
             if any(math.hypot(point.x() - existing.x(), point.y() - existing.y()) <= tolerance
                    for existing in deduped):
