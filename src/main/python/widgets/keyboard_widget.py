@@ -439,6 +439,8 @@ class KeyboardWidget(QWidget):
         vertical_lines = []
         horizontal_lines = []
         epsilon = avg_key_size * 0.06
+        gap_margin = avg_key_size * 0.12
+        shrink = avg_key_size * 0.08
 
         for rect in key_rects:
             min_left = None
@@ -450,6 +452,8 @@ class KeyboardWidget(QWidget):
                 overlap_bottom = min(rect.bottom(), other.bottom())
                 if overlap_top >= overlap_bottom:
                     continue
+                overlap_top -= gap_margin
+                overlap_bottom += gap_margin
                 if min_left is None or other.left() < (min_left - epsilon):
                     min_left = other.left()
                     candidates = [(other, overlap_top, overlap_bottom)]
@@ -468,6 +472,8 @@ class KeyboardWidget(QWidget):
                 overlap_right = min(rect.right(), other.right())
                 if overlap_left >= overlap_right:
                     continue
+                overlap_left -= gap_margin
+                overlap_right += gap_margin
                 if min_top is None or other.top() < (min_top - epsilon):
                     min_top = other.top()
                     candidates = [(other, overlap_left, overlap_right)]
@@ -493,11 +499,21 @@ class KeyboardWidget(QWidget):
 
         intersections = []
         seen = set()
+        def _shrunk_rect(rect):
+            if shrink <= 0:
+                return rect
+            shrunk = rect.adjusted(shrink, shrink, -shrink, -shrink)
+            if shrunk.width() <= 1 or shrunk.height() <= 1:
+                return rect
+            return shrunk
+
+        shrunk_rects = [_shrunk_rect(rect) for rect in key_rects]
+
         for gap_x, y_min, y_max in vertical_lines:
             for gap_y, x_min, x_max in horizontal_lines:
                 if (x_min - epsilon) <= gap_x <= (x_max + epsilon) and (y_min - epsilon) <= gap_y <= (y_max + epsilon):
                     point = QPointF(gap_x, gap_y)
-                    if any(rect.adjusted(-epsilon, -epsilon, epsilon, epsilon).contains(point) for rect in key_rects):
+                    if any(rect.contains(point) for rect in shrunk_rects):
                         continue
                     key = (round(point.x(), 1), round(point.y(), 1))
                     if key in seen:
