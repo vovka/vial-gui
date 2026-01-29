@@ -26,35 +26,35 @@ class ConnectorRouter:
 
     def _find_path_to_key(self, start, key_rect):
         """Find path from start to key, connecting to nearest edge point."""
-        # Find intersections near the key
-        key_center = key_rect.center()
-        nearby_to_key = self._find_nearby_intersections(key_center, count=12)
+        key_point = self._find_key_connection_point(key_rect, start)
 
-        if not nearby_to_key:
-            key_point = self._find_key_connection_point(key_rect, start)
+        # Find ALL intersections that can connect to key without crossing keys
+        valid_endpoints = []
+        for intersection in self.gap_intersections:
+            int_key_point = self._find_key_connection_point(key_rect, intersection)
+            if not self._segment_crosses_keys(intersection, int_key_point, key_rect):
+                valid_endpoints.append((intersection, int_key_point))
+
+        if not valid_endpoints:
+            # No valid intersection - use simple path
             return self._build_simple_path(start, key_point)
 
-        # Find best path to any intersection near the key
-        # that can connect to the key without crossing other keys
+        # Find best path to any valid endpoint
         best_path = None
         best_cost = float('inf')
+        best_key_point = key_point
 
-        for target_intersection in nearby_to_key:
-            # Check if this intersection can connect to key without crossing
-            key_point = self._find_key_connection_point(key_rect, target_intersection)
-            if self._segment_crosses_keys(target_intersection, key_point, key_rect):
-                continue  # Skip - final segment would cross keys
-
-            path = self._find_shortest_manhattan_path(start, target_intersection, key_rect)
+        for intersection, int_key_point in valid_endpoints:
+            path = self._find_shortest_manhattan_path(start, intersection, key_rect)
             if path and len(path) >= 1:
-                cost = self._path_length(path)
+                # Total cost includes path + final segment
+                cost = self._path_length(path) + GeometryUtils.distance(intersection, int_key_point)
                 if cost < best_cost:
                     best_cost = cost
                     best_path = path
-                    best_key_point = key_point
+                    best_key_point = int_key_point
 
         if not best_path:
-            key_point = self._find_key_connection_point(key_rect, start)
             return self._build_simple_path(start, key_point)
 
         # Add the final connection to the key
