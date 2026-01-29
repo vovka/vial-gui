@@ -6,7 +6,9 @@ from widgets.connector_routing.geometry_utils import GeometryUtils
 
 
 class ConnectorRouter:
-    """Routes connectors using shortest Manhattan path through intersections."""
+    """Routes connectors using shortest Manhattan path avoiding keys."""
+
+    KEY_CROSSING_PENALTY = 1000  # High penalty for crossing keys
 
     def __init__(self, key_rects, avg_key_size, gap_intersections=None):
         self.key_rects = key_rects
@@ -15,16 +17,15 @@ class ConnectorRouter:
         self._tolerance = avg_key_size * 0.1
 
     def route(self, label_center, key_rect):
-        """Find shortest Manhattan path from label to key."""
+        """Find shortest Manhattan path from label to key, avoiding keys."""
         key_point = self._find_key_connection_point(key_rect, label_center)
         if not self.gap_intersections:
             return self._build_simple_path(label_center, key_point)
-        path = self._find_shortest_manhattan_path(label_center, key_point)
+        path = self._find_shortest_manhattan_path(label_center, key_point, key_rect)
         return self._normalize_path(path)
 
-    def _find_shortest_manhattan_path(self, start, end):
-        """A* pathfinding with Manhattan distance through intersection points."""
-        # Build list of all nodes: start, end, and all intersections
+    def _find_shortest_manhattan_path(self, start, end, target_key_rect):
+        """A* pathfinding with Manhattan distance, penalizing key crossings."""
         nodes = [start, end] + list(self.gap_intersections)
 
         def manhattan_dist(p1, p2):
@@ -33,11 +34,16 @@ class ConnectorRouter:
         def node_key(p):
             return (round(p.x(), 1), round(p.y(), 1))
 
-        # A* algorithm - all nodes connected with Manhattan distance cost
+        def edge_cost(p1, p2):
+            """Cost = Manhattan distance + penalty for each key crossed."""
+            base_cost = manhattan_dist(p1, p2)
+            # Check orthogonal path for key crossings
+            crossings = self._count_orthogonal_crossings(p1, p2, target_key_rect)
+            return base_cost + crossings * self.KEY_CROSSING_PENALTY
+
         start_key = node_key(start)
         end_key = node_key(end)
 
-        # Priority queue: (f_score, counter, node_key, node)
         counter = 0
         open_set = [(manhattan_dist(start, end), counter, start_key, start)]
 
@@ -53,7 +59,6 @@ class ConnectorRouter:
             visited.add(current_key)
 
             if current_key == end_key:
-                # Reconstruct path
                 path = [end]
                 while current_key in came_from:
                     current_key, current = came_from[current_key]
@@ -61,14 +66,12 @@ class ConnectorRouter:
                 path.reverse()
                 return self._make_orthogonal(path)
 
-            # All intersection nodes are potential neighbors
             for neighbor in nodes:
                 neighbor_key = node_key(neighbor)
                 if neighbor_key == current_key or neighbor_key in visited:
                     continue
 
-                # Cost is Manhattan distance to neighbor
-                tentative_g = g_score[current_key] + manhattan_dist(current, neighbor)
+                tentative_g = g_score[current_key] + edge_cost(current, neighbor)
 
                 if neighbor_key not in g_score or tentative_g < g_score[neighbor_key]:
                     came_from[neighbor_key] = (current_key, current)
@@ -77,8 +80,28 @@ class ConnectorRouter:
                     counter += 1
                     heapq.heappush(open_set, (f_score, counter, neighbor_key, neighbor))
 
-        # No path found, fallback to simple path
         return self._build_simple_path(start, end)
+
+    def _count_orthogonal_crossings(self, p1, p2, target_key_rect):
+        """Count keys crossed by orthogonal path from p1 to p2."""
+        # Orthogonal path: p1 -> corner -> p2
+        corner = QPointF(p2.x(), p1.y())
+        count = 0
+        # Check horizontal segment: p1 to corner
+        count += self._count_segment_crossings(p1, corner, target_key_rect)
+        # Check vertical segment: corner to p2
+        count += self._count_segment_crossings(corner, p2, target_key_rect)
+        return count
+
+    def _count_segment_crossings(self, p1, p2, target_key_rect):
+        """Count how many keys a line segment crosses."""
+        count = 0
+        for rect in self.key_rects:
+            if rect == target_key_rect:
+                continue
+            if GeometryUtils.line_intersects_rect(p1, p2, rect):
+                count += 1
+        return count
 
     def _make_orthogonal(self, path):
         """Convert path to orthogonal segments by adding corner points."""
@@ -88,9 +111,7 @@ class ConnectorRouter:
         for i in range(1, len(path)):
             prev = result[-1]
             curr = path[i]
-            # If not aligned, add a corner point
             if abs(prev.x() - curr.x()) > 0.1 and abs(prev.y() - curr.y()) > 0.1:
-                # Add corner: go horizontal first, then vertical
                 result.append(QPointF(curr.x(), prev.y()))
             result.append(curr)
         return result
@@ -130,14 +151,12 @@ class ConnectorRouter:
         """Remove duplicate and collinear points."""
         if not points:
             return points
-        # Remove duplicates
         deduped = [points[0]]
         for pt in points[1:]:
             if GeometryUtils.distance(pt, deduped[-1]) > 0.01:
                 deduped.append(pt)
         if len(deduped) < 3:
             return deduped
-        # Remove collinear middle points
         simplified = [deduped[0]]
         for i in range(1, len(deduped) - 1):
             prev = simplified[-1]
