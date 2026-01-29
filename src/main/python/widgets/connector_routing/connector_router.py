@@ -86,20 +86,32 @@ class ConnectorRouter:
         return path
 
     def _traverse_graph_to_target(self, start_wp, target_wp):
-        """Traverse the graph from start waypoint to target waypoint using BFS."""
+        """Find shortest path by distance using Dijkstra's algorithm."""
         if start_wp == target_wp:
             return []
-        from collections import deque
-        queue = deque([(start_wp, [])])
-        visited = {start_wp}
-        while queue:
-            current, path = queue.popleft()
+        import heapq
+        dist = {start_wp: 0}
+        prev = {start_wp: None}
+        heap = [(0, id(start_wp), start_wp)]
+        while heap:
+            d, _, current = heapq.heappop(heap)
+            if current == target_wp:
+                path = []
+                node = target_wp
+                while prev[node] is not None:
+                    path.append(node.position)
+                    node = prev[node]
+                path.reverse()
+                return path
+            if d > dist.get(current, float('inf')):
+                continue
             for neighbor in current.neighbors:
-                if neighbor == target_wp:
-                    return path + [neighbor.position]
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append((neighbor, path + [neighbor.position]))
+                edge_len = current.distance_to(neighbor.position)
+                new_dist = d + edge_len
+                if new_dist < dist.get(neighbor, float('inf')):
+                    dist[neighbor] = new_dist
+                    prev[neighbor] = current
+                    heapq.heappush(heap, (new_dist, id(neighbor), neighbor))
         return self._traverse_graph(start_wp, target_wp.position)
 
     def _select_next_waypoint(self, current, destination, visited):
