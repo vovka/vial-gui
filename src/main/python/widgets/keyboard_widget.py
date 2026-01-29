@@ -586,6 +586,23 @@ class KeyboardWidget(QWidget):
                         continue
                     seen.add(key)
                     intersections.append(point)
+
+        for rect in key_rects:
+            expanded = rect.adjusted(-gap_margin, -gap_margin, gap_margin, gap_margin)
+            corner_points = [
+                QPointF(expanded.left(), expanded.top()),
+                QPointF(expanded.right(), expanded.top()),
+                QPointF(expanded.left(), expanded.bottom()),
+                QPointF(expanded.right(), expanded.bottom()),
+            ]
+            for point in corner_points:
+                if any(r.contains(point) for r in shrunk_rects):
+                    continue
+                key = (round(point.x(), 1), round(point.y(), 1))
+                if key in seen:
+                    continue
+                seen.add(key)
+                intersections.append(point)
         return intersections
 
     def _debug_key_rects(self):
