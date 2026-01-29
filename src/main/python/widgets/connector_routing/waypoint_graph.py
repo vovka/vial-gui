@@ -184,6 +184,7 @@ class WaypointGraph:
         self._connect_horizontal_lines()
         self._connect_vertical_lines()
         self._connect_perimeter_to_interior()
+        self._connect_components()
 
     def _connect_horizontal_lines(self):
         """Connect waypoints on the same horizontal line."""
@@ -234,6 +235,50 @@ class WaypointGraph:
                     pwp.add_neighbor(iwp)
                     iwp.add_neighbor(pwp)
                     break
+
+    def _connect_components(self):
+        """Connect disconnected graph components."""
+        components = self._find_components()
+        if len(components) <= 1:
+            return
+        while len(components) > 1:
+            best_pair = None
+            best_dist = float('inf')
+            for i, comp1 in enumerate(components):
+                for comp2 in components[i + 1:]:
+                    for wp1 in comp1:
+                        for wp2 in comp2:
+                            dist = wp1.distance_to(wp2.position)
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_pair = (wp1, wp2, comp1, comp2)
+            if best_pair:
+                wp1, wp2, comp1, comp2 = best_pair
+                wp1.add_neighbor(wp2)
+                wp2.add_neighbor(wp1)
+                comp1.extend(comp2)
+                components.remove(comp2)
+
+    def _find_components(self):
+        """Find all connected components in the graph."""
+        visited = set()
+        components = []
+        for wp in self.waypoints:
+            if wp in visited:
+                continue
+            component = []
+            stack = [wp]
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                component.append(current)
+                for neighbor in current.neighbors:
+                    if neighbor not in visited:
+                        stack.append(neighbor)
+            components.append(component)
+        return components
 
     def _segment_blocked(self, p1, p2):
         """Check if segment between two points is blocked by a key."""
