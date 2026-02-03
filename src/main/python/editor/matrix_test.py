@@ -75,6 +75,7 @@ class MatrixTest(BasicEditor):
 
         self.unlock_btn.clicked.connect(self.unlock)
         self.reset_btn.clicked.connect(self.reset_keyboard_widget)
+        self.layout_editor.changed.connect(self.on_layout_changed)
 
         self.grabber = QWidget()
 
@@ -138,6 +139,12 @@ class MatrixTest(BasicEditor):
         self.keyboardWidget.update()
 
     def on_show_keycodes_changed(self, state):
+        self.refresh_keycodes_display()
+
+    def on_layout_changed(self):
+        if self.keyboard is None:
+            return
+        self.keyboardWidget.update_layout()
         self.refresh_keycodes_display()
 
     def valid(self):
