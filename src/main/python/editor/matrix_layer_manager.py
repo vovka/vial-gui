@@ -83,8 +83,15 @@ class MatrixLayerManager:
 
     def _handle_key_down(self, widget):
         """Handle a key being pressed."""
+        # First check current layer, then fall back to layer 0 for transparent keys
         keycode = self._get_keycode_at_layer(widget, self._current_layer)
         qmk_id = self._serialize_keycode(keycode)
+
+        # If key is transparent, check layer 0 (base layer) where layer keys are defined
+        if qmk_id == 'KC_TRNS' and self._current_layer != 0:
+            keycode = self._get_keycode_at_layer(widget, 0)
+            qmk_id = self._serialize_keycode(keycode)
+
         print(f"[DEBUG] Key down: row={widget.desc.row}, col={widget.desc.col}, "
               f"layer={self._current_layer}, keycode={keycode!r}, qmk_id={qmk_id!r}")
         if not qmk_id:
