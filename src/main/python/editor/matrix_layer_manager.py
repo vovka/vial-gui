@@ -82,10 +82,13 @@ class MatrixLayerManager:
         """Handle a key being pressed."""
         keycode = self._get_keycode_at_layer(widget, self._current_layer)
         qmk_id = self._serialize_keycode(keycode)
+        print(f"[DEBUG] Key down: row={widget.desc.row}, col={widget.desc.col}, "
+              f"layer={self._current_layer}, keycode={keycode!r}, qmk_id={qmk_id!r}")
         if not qmk_id:
             return False
 
         layer_info = LayerDetector.get_layer_info(qmk_id)
+        print(f"[DEBUG] LayerDetector result: {layer_info}")
         if not layer_info:
             return False
 
