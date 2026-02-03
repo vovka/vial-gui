@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 from editor.layer_detector import LayerDetector
+from keycodes.keycodes import Keycode
 
 
 class MatrixLayerManager:
@@ -10,6 +11,7 @@ class MatrixLayerManager:
         self._toggled_layers = set()
         self._momentary_layers = set()
         self._keyboard = None
+        self._active_layer_keys = {}
 
     def set_keyboard(self, keyboard):
         """Set the keyboard reference for accessing layout data."""
@@ -21,6 +23,7 @@ class MatrixLayerManager:
         self._current_layer = 0
         self._toggled_layers.clear()
         self._momentary_layers.clear()
+        self._active_layer_keys.clear()
 
     @property
     def current_layer(self):
@@ -32,6 +35,9 @@ class MatrixLayerManager:
         """Manually set the current layer."""
         if self._keyboard and 0 <= layer < self._keyboard.layers:
             self._current_layer = layer
+            self._toggled_layers.clear()
+            self._momentary_layers.clear()
+            self._active_layer_keys.clear()
 
     def get_keycode_for_widget(self, widget):
         """Get the keycode for a widget at the current layer."""
@@ -45,27 +51,61 @@ class MatrixLayerManager:
             return self._keyboard.encoder_layout.get(key)
         return None
 
+    def _get_keycode_at_layer(self, widget, layer):
+        """Get the keycode for a widget at a specific layer."""
+        if not self._keyboard:
+            return None
+        if widget.desc.row is not None:
+            key = (layer, widget.desc.row, widget.desc.col)
+            return self._keyboard.layout.get(key)
+        return None
+
+    def _serialize_keycode(self, keycode):
+        """Convert integer keycode to string QMK ID."""
+        if keycode is None:
+            return None
+        if isinstance(keycode, str):
+            return keycode
+        return Keycode.serialize(keycode)
+
     def process_key_press(self, widget, is_pressed):
         """Process a key press/release and update layer state if needed."""
         if not self._keyboard:
             return False
 
-        keycode = self.get_keycode_for_widget(widget)
-        if not keycode:
+        if is_pressed:
+            return self._handle_key_down(widget)
+        else:
+            return self._handle_key_up(widget)
+
+    def _handle_key_down(self, widget):
+        """Handle a key being pressed."""
+        keycode = self._get_keycode_at_layer(widget, self._current_layer)
+        qmk_id = self._serialize_keycode(keycode)
+        if not qmk_id:
             return False
 
-        layer_info = LayerDetector.get_layer_info(keycode)
+        layer_info = LayerDetector.get_layer_info(qmk_id)
         if not layer_info:
             return False
 
         key_type, target_layer = layer_info
-        return self._handle_layer_change(key_type, target_layer, is_pressed)
-
-    def _handle_layer_change(self, key_type, target_layer, is_pressed):
-        """Handle layer state changes based on key type."""
-        if not self._keyboard or target_layer >= self._keyboard.layers:
+        if target_layer >= self._keyboard.layers:
             return False
 
+        self._active_layer_keys[widget] = (key_type, target_layer)
+        return self._apply_layer_change(key_type, target_layer, True)
+
+    def _handle_key_up(self, widget):
+        """Handle a key being released."""
+        if widget not in self._active_layer_keys:
+            return False
+
+        key_type, target_layer = self._active_layer_keys.pop(widget)
+        return self._apply_layer_change(key_type, target_layer, False)
+
+    def _apply_layer_change(self, key_type, target_layer, is_pressed):
+        """Apply a layer state change and update effective layer."""
         changed = False
 
         if key_type == 'momentary':
