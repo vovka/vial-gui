@@ -12,6 +12,7 @@ class MatrixLayerManager:
         self._momentary_layers = set()
         self._keyboard = None
         self._active_layer_keys = {}
+        self._tri_layer_held = set()  # Track which tri-layer keys are held
 
     def set_keyboard(self, keyboard):
         """Set the keyboard reference for accessing layout data."""
@@ -24,6 +25,7 @@ class MatrixLayerManager:
         self._toggled_layers.clear()
         self._momentary_layers.clear()
         self._active_layer_keys.clear()
+        self._tri_layer_held.clear()
 
     @property
     def current_layer(self):
@@ -38,6 +40,7 @@ class MatrixLayerManager:
             self._toggled_layers.clear()
             self._momentary_layers.clear()
             self._active_layer_keys.clear()
+            self._tri_layer_held.clear()
 
     def get_keycode_for_widget(self, widget):
         """Get the keycode for a widget at the current layer."""
@@ -119,6 +122,8 @@ class MatrixLayerManager:
             changed = self._handle_switch(target_layer)
         elif key_type == 'one_shot' and is_pressed:
             changed = self._handle_one_shot(target_layer)
+        elif key_type in ('tri_layer_1', 'tri_layer_2'):
+            changed = self._handle_tri_layer(key_type, is_pressed)
 
         if changed:
             self._update_effective_layer()
@@ -152,8 +157,27 @@ class MatrixLayerManager:
         self._current_layer = layer
         return True
 
+    def _handle_tri_layer(self, key_type, is_pressed):
+        """Handle Vial tri-layer keys (FN_MO13, FN_MO23)."""
+        if is_pressed:
+            self._tri_layer_held.add(key_type)
+        else:
+            self._tri_layer_held.discard(key_type)
+        return True
+
     def _update_effective_layer(self):
         """Calculate and set the effective layer based on active layers."""
+        # Handle tri-layer: both FN_MO13 and FN_MO23 held = layer 3
+        if 'tri_layer_1' in self._tri_layer_held and 'tri_layer_2' in self._tri_layer_held:
+            self._current_layer = 3
+            return
+        elif 'tri_layer_1' in self._tri_layer_held:
+            self._current_layer = 1
+            return
+        elif 'tri_layer_2' in self._tri_layer_held:
+            self._current_layer = 2
+            return
+
         all_active = self._toggled_layers | self._momentary_layers
         if all_active:
             self._current_layer = max(all_active)
