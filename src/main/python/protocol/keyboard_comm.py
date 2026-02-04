@@ -543,3 +543,26 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
     def set_vialrgb_color(self, h, s, v):
         self.rgb_hsv = (h, s, v)
         self._vialrgb_set_mode()
+
+    def password_session_unlock(self, derived_key: bytes):
+        """
+        Send derived key to keyboard to unlock password macros for this session.
+
+        The keyboard will use this key to decrypt password macros in RAM
+        for execution until power cycle.
+        """
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS, CMD_VIAL_PASSWORD_UNLOCK
+        if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            return
+
+        # Send key in chunks that fit in a packet (key is 32 bytes)
+        self.usb_send(self.dev, struct.pack("BB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK) + derived_key,
+                      retries=20)
+
+    def password_session_lock(self):
+        """Tell keyboard to clear decrypted passwords from RAM."""
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS, CMD_VIAL_PASSWORD_LOCK
+        if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            return
+
+        self.usb_send(self.dev, struct.pack("BB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_LOCK), retries=20)
