@@ -113,8 +113,8 @@ class MasterPasswordDialog(QDialog):
             self.btn_ok.setEnabled(False)
             return
 
-        if len(password) < 4:
-            self.lbl_error.setText("Password must be at least 4 characters")
+        if len(password) < 8:
+            self.lbl_error.setText("Password must be at least 8 characters")
             self.btn_ok.setEnabled(False)
             return
 

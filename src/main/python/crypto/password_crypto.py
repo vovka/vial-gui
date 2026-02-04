@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import secrets
-import hashlib
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -13,7 +12,7 @@ class PasswordCrypto:
     SALT_SIZE = 16
     IV_SIZE = 12  # GCM standard nonce size
     KEY_SIZE = 32  # AES-256
-    PBKDF2_ITERATIONS = 100000
+    PBKDF2_ITERATIONS = 310000
 
     @staticmethod
     def generate_salt() -> bytes:

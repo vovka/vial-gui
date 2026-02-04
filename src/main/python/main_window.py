@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+import base64
 import logging
 import platform
 from json import JSONDecodeError
@@ -651,7 +652,6 @@ class MainWindow(QMainWindow):
         """Set up or change the master password for password macros."""
         from widgets.master_password_dialog import MasterPasswordDialog
         from password_session import PasswordSession
-        import base64
 
         uid_hex = self._get_keyboard_uid_hex()
         if uid_hex is None:
@@ -679,7 +679,6 @@ class MainWindow(QMainWindow):
         """Unlock the password session with the master password."""
         from widgets.master_password_dialog import MasterPasswordDialog
         from password_session import PasswordSession
-        import base64
 
         uid_hex = self._get_keyboard_uid_hex()
         if uid_hex is None:
