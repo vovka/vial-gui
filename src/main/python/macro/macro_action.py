@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+import base64
 import struct
 
 from keycodes.keycodes import Keycode
@@ -199,7 +200,6 @@ class ActionPassword(BasicAction):
 
     def save(self):
         """Save encrypted form (for .vil files)."""
-        import base64
         return [
             self.tag,
             base64.b64encode(self.encrypted_data).decode("ascii"),
@@ -209,7 +209,6 @@ class ActionPassword(BasicAction):
 
     def restore(self, act):
         """Restore from saved format."""
-        import base64
         super().restore(act)
         self.encrypted_data = base64.b64decode(act[1])
         self.salt = base64.b64decode(act[2])
