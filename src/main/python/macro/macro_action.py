@@ -13,6 +13,7 @@ SS_DELAY_CODE = 4
 VIAL_MACRO_EXT_TAP = 5
 VIAL_MACRO_EXT_DOWN = 6
 VIAL_MACRO_EXT_UP = 7
+SS_PASSWORD_CODE = 8
 
 
 class BasicAction:
@@ -157,3 +158,68 @@ class ActionDelay(BasicAction):
 
     def __eq__(self, other):
         return super().__eq__(other) and self.delay == other.delay
+
+
+class ActionPassword(BasicAction):
+    """
+    Password macro action that stores encrypted passwords.
+
+    Passwords are encrypted with the master password key and stored
+    in EEPROM. They are only decrypted when the user unlocks the
+    password session in the GUI.
+    """
+
+    tag = "password"
+
+    def __init__(self, encrypted_data=b"", salt=b"", iv=b""):
+        super().__init__()
+        self.encrypted_data = encrypted_data
+        self.salt = salt
+        self.iv = iv
+        self._decrypted_text = None  # Cached plaintext (only in RAM)
+
+    def serialize(self, vial_protocol):
+        """
+        Serialize for EEPROM storage.
+
+        Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_high + len_low + data
+        where data = salt (16) + iv (12) + encrypted_data (variable)
+        """
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS
+        if vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            raise RuntimeError("ActionPassword requires vial_protocol >= 7")
+
+        blob = self.salt + self.iv + self.encrypted_data
+        length = len(blob)
+        if length > 65535:
+            raise RuntimeError("Password data too large")
+
+        return struct.pack(">BBHH", SS_QMK_PREFIX, SS_PASSWORD_CODE,
+                           length, len(self.encrypted_data)) + blob
+
+    def save(self):
+        """Save encrypted form (for .vil files)."""
+        import base64
+        return [
+            self.tag,
+            base64.b64encode(self.encrypted_data).decode("ascii"),
+            base64.b64encode(self.salt).decode("ascii"),
+            base64.b64encode(self.iv).decode("ascii")
+        ]
+
+    def restore(self, act):
+        """Restore from saved format."""
+        import base64
+        super().restore(act)
+        self.encrypted_data = base64.b64decode(act[1])
+        self.salt = base64.b64decode(act[2])
+        self.iv = base64.b64decode(act[3])
+
+    def __eq__(self, other):
+        return (super().__eq__(other) and
+                self.encrypted_data == other.encrypted_data and
+                self.salt == other.salt and
+                self.iv == other.iv)
+
+    def __repr__(self):
+        return "{}<encrypted:{} bytes>".format(self.tag, len(self.encrypted_data))

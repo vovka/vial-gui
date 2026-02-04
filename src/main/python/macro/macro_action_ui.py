@@ -1,10 +1,10 @@
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
-from PyQt5.QtWidgets import QLineEdit, QToolButton, QWidget, QSizePolicy, QSpinBox
+from PyQt5.QtWidgets import QLineEdit, QToolButton, QWidget, QSizePolicy, QSpinBox, QDialog, QLabel
 
 from constants import KEY_SIZE_RATIO
 from tabbed_keycodes import TabbedKeycodes
 from widgets.flowlayout import FlowLayout
-from macro.macro_action import ActionText, ActionSequence, ActionDown, ActionUp, ActionTap, ActionDelay
+from macro.macro_action import ActionText, ActionSequence, ActionDown, ActionUp, ActionTap, ActionDelay, ActionPassword
 from widgets.key_widget import KeyWidget
 
 
@@ -183,12 +183,97 @@ class ActionDelayUI(BasicActionUI):
         self.changed.emit()
 
 
+class ActionPasswordUI(BasicActionUI):
+    """UI for password macro action."""
+
+    actcls = ActionPassword
+
+    def __init__(self, container, act=None):
+        super().__init__(container, act)
+
+        self.display = QLineEdit()
+        self.display.setEchoMode(QLineEdit.Password)
+        self.display.setReadOnly(True)
+        self.display.setPlaceholderText("(encrypted)")
+        self._update_display()
+
+        self.btn_edit = QToolButton()
+        self.btn_edit.setText("Edit")
+        self.btn_edit.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_edit.clicked.connect(self.on_edit)
+
+        self.lbl_status = QLabel()
+        self._update_status()
+
+        self.layout = FlowLayout()
+        self.layout_container = QWidget()
+        self.layout_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.layout_container.setLayout(self.layout)
+
+        self.layout.addWidget(self.display)
+        self.layout.addWidget(self.btn_edit)
+        self.layout.addWidget(self.lbl_status)
+
+    def _update_display(self):
+        """Update the display field based on encryption state."""
+        if self.act.encrypted_data:
+            self.display.setText("********")
+        else:
+            self.display.setText("")
+
+    def _update_status(self):
+        """Update status label based on session state."""
+        from password_session import PasswordSession
+        session = PasswordSession.instance()
+        if not session.is_unlocked():
+            self.lbl_status.setText("(locked)")
+            self.lbl_status.setStyleSheet("QLabel { color: orange; }")
+            self.btn_edit.setEnabled(False)
+        else:
+            self.lbl_status.setText("")
+            self.btn_edit.setEnabled(True)
+
+    def on_edit(self):
+        """Open password entry dialog."""
+        from password_session import PasswordSession
+        from widgets.password_entry_dialog import PasswordEntryDialog
+
+        session = PasswordSession.instance()
+        if not session.is_unlocked():
+            return
+
+        dialog = PasswordEntryDialog(self.layout_container)
+        if dialog.exec_() == QDialog.Accepted:
+            new_password = dialog.get_password()
+            if new_password:
+                ciphertext, salt, iv = session.encrypt(new_password)
+                self.act.encrypted_data = ciphertext
+                self.act.salt = salt
+                self.act.iv = iv
+                self._update_display()
+                self.changed.emit()
+
+    def insert(self, row):
+        self._update_status()
+        self.container.addWidget(self.layout_container, row, 2)
+
+    def remove(self):
+        self.container.removeWidget(self.layout_container)
+
+    def delete(self):
+        self.display.deleteLater()
+        self.btn_edit.deleteLater()
+        self.lbl_status.deleteLater()
+        self.layout_container.deleteLater()
+
+
 tag_to_action = {
     "down": ActionDown,
     "up": ActionUp,
     "tap": ActionTap,
     "text": ActionText,
     "delay": ActionDelay,
+    "password": ActionPassword,
 }
 
 ui_action = {
@@ -197,4 +282,5 @@ ui_action = {
     ActionDown: ActionDownUI,
     ActionTap: ActionTapUI,
     ActionDelay: ActionDelayUI,
+    ActionPassword: ActionPasswordUI,
 }
