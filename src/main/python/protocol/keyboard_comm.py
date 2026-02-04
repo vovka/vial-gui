@@ -555,8 +555,11 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
         if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
             return
 
-        # Send key in chunks that fit in a packet (key is 32 bytes)
-        self.usb_send(self.dev, struct.pack("BB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK) + derived_key,
+        # Send key in two 16-byte chunks (HID packet limit is 32 bytes)
+        # Format: CMD_VIA_VIAL_PREFIX + CMD_VIAL_PASSWORD_UNLOCK + chunk_index + 16 bytes
+        self.usb_send(self.dev, struct.pack("BBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 0) + derived_key[0:16],
+                      retries=20)
+        self.usb_send(self.dev, struct.pack("BBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 1) + derived_key[16:32],
                       retries=20)
 
     def password_session_lock(self):
