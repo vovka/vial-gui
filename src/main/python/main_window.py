@@ -670,11 +670,8 @@ class MainWindow(QMainWindow):
                                    base64.b64encode(salt).decode("ascii"))
 
             # Send key to keyboard
-            print("[PWD] set_master_password: sending key to keyboard")
             if isinstance(self.autorefresh.current_device, VialKeyboard):
                 self.autorefresh.current_device.keyboard.password_session_unlock(session.get_key())
-            else:
-                print("[PWD] set_master_password: not a VialKeyboard, skipped")
 
             self.rebuild()
 
@@ -683,11 +680,8 @@ class MainWindow(QMainWindow):
         from widgets.master_password_dialog import MasterPasswordDialog
         from password_session import PasswordSession
 
-        print("[PWD] unlock_password_session: starting")
-
         uid_hex = self._get_keyboard_uid_hex()
         if uid_hex is None:
-            print("[PWD] unlock_password_session: no keyboard UID")
             return
 
         # Check if master password is set up
@@ -695,7 +689,6 @@ class MainWindow(QMainWindow):
         stored_salt_b64 = self.settings.value("password_macros/{}/master_salt".format(uid_hex))
 
         if not stored_hash_b64 or not stored_salt_b64:
-            print("[PWD] unlock_password_session: no master password stored")
             QMessageBox.information(self, "Password Session",
                                     "No master password has been set up for this keyboard.\n"
                                     "Use 'Set Master Password...' first.")
@@ -710,16 +703,12 @@ class MainWindow(QMainWindow):
             session = PasswordSession.instance()
 
             if session.unlock(password, stored_hash, stored_salt):
-                print("[PWD] unlock_password_session: password verified, sending key")
                 # Send key to keyboard
                 if isinstance(self.autorefresh.current_device, VialKeyboard):
                     self.autorefresh.current_device.keyboard.password_session_unlock(session.get_key())
-                else:
-                    print("[PWD] unlock_password_session: not a VialKeyboard, skipped")
                 self.rebuild()
                 return
             else:
-                print("[PWD] unlock_password_session: password incorrect")
                 dialog.set_error("Incorrect password")
 
     def lock_password_session(self):

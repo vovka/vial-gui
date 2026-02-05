@@ -60,10 +60,8 @@ class PasswordCrypto:
         Returns:
             Tuple of (ciphertext, iv)
         """
-        print("[PWD] encrypt_password: plaintext_len={}, key_len={}".format(len(plaintext), len(key)))
-        print("[PWD]   key[0:4]={}".format(key[0:4].hex()))
         max_attempts = 100  # Should succeed within a few tries
-        for attempt in range(max_attempts):
+        for _ in range(max_attempts):
             iv = PasswordCrypto.generate_iv()
             # Use first 16 bytes of key for AES-128
             cipher = Cipher(
@@ -75,7 +73,6 @@ class PasswordCrypto:
 
             # Check if ciphertext or IV contains NUL bytes (would break macro format)
             if b'\x00' not in ciphertext and b'\x00' not in iv:
-                print("[PWD]   encrypted: cipher_len={}, iv[0:4]={}".format(len(ciphertext), iv[0:4].hex()))
                 return ciphertext, iv
 
         # Fallback (should rarely happen)

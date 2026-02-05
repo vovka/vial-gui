@@ -199,11 +199,6 @@ class ActionPassword(BasicAction):
         len_lo = (cipher_len & 0xFF) + 1
         len_hi = ((cipher_len >> 8) & 0xFF) + 1
 
-        print("[PWD] ActionPassword.serialize: cipher_len={}, iv_len={}".format(cipher_len, len(self.iv)))
-        print("[PWD]   encrypted[0:4]={}, iv[0:4]={}".format(
-            self.encrypted_data[0:4].hex() if self.encrypted_data else "empty",
-            self.iv[0:4].hex() if self.iv else "empty"))
-
         # Format: [prefix][code][len_lo+1][len_hi+1][data][iv]
         return struct.pack("BBBB", SS_QMK_PREFIX, SS_PASSWORD_CODE,
                            len_lo, len_hi) + self.encrypted_data + self.iv
