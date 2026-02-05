@@ -105,25 +105,29 @@ def macro_deserialize_v2(data):
                 for x in range(4):
                     data.pop(0)
             elif act == SS_PASSWORD_CODE:
-                # Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len(2) + encrypted_len(2) + blob
-                if len(data) < 6:
+                # Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_lo+1 + len_hi+1 + encrypted + iv(16)
+                # Length bytes use +1 encoding to avoid 0x00 (NUL is macro separator)
+                IV_SIZE = 16
+                if len(data) < 4:
                     break
 
-                blob_len = struct.unpack(">H", bytes(data[2:4]))[0]
-                encrypted_len = struct.unpack(">H", bytes(data[4:6]))[0]
+                # Decode length (each byte has +1 encoding)
+                len_lo = data[2] - 1
+                len_hi = data[3] - 1
+                cipher_len = len_lo | (len_hi << 8)
+                total_len = 4 + cipher_len + IV_SIZE
 
-                if len(data) < 6 + blob_len:
+                if len(data) < total_len:
                     break
 
-                # blob = salt (16) + iv (12) + encrypted_data
-                blob = bytes(data[6:6 + blob_len])
-                salt = blob[0:16]
-                iv = blob[16:28]
-                encrypted_data = blob[28:28 + encrypted_len]
+                encrypted_data = bytes(data[4:4 + cipher_len])
+                iv = bytes(data[4 + cipher_len:4 + cipher_len + IV_SIZE])
+                # Salt is stored separately in keyboard NVM, not per-macro
+                salt = b""
 
                 sequence.append([SS_PASSWORD_CODE, encrypted_data, salt, iv])
 
-                for x in range(6 + blob_len):
+                for x in range(total_len):
                     data.pop(0)
             else:
                 # it is clearly malformed, just skip this byte and hope for the best

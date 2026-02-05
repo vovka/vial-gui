@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import secrets
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 
@@ -10,8 +10,9 @@ class PasswordCrypto:
     """Cryptographic utilities for password macro encryption."""
 
     SALT_SIZE = 16
-    IV_SIZE = 12  # GCM standard nonce size
-    KEY_SIZE = 32  # AES-256
+    IV_SIZE = 16  # AES-CTR uses 16-byte IV to match firmware
+    KEY_SIZE = 32  # Full derived key size (sent to keyboard)
+    ENCRYPTION_KEY_SIZE = 16  # AES-128 key size for encryption
     PBKDF2_ITERATIONS = 310000
 
     @staticmethod
@@ -34,7 +35,7 @@ class PasswordCrypto:
             salt: Random salt bytes
 
         Returns:
-            32-byte derived key suitable for AES-256
+            32-byte derived key (first 16 bytes used for AES-128)
         """
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
@@ -47,38 +48,59 @@ class PasswordCrypto:
     @staticmethod
     def encrypt_password(plaintext: str, key: bytes) -> tuple:
         """
-        Encrypt a password using AES-256-GCM.
+        Encrypt a password using AES-128-CTR to match firmware.
+
+        The encryption is retried with new IVs until the result contains
+        no NUL bytes (0x00), since NUL is used as macro separator in EEPROM.
 
         Args:
             plaintext: The password to encrypt
-            key: 32-byte encryption key
+            key: 32-byte encryption key (first 16 bytes used)
 
         Returns:
             Tuple of (ciphertext, iv)
         """
-        iv = PasswordCrypto.generate_iv()
-        aesgcm = AESGCM(key)
-        ciphertext = aesgcm.encrypt(iv, plaintext.encode("utf-8"), None)
-        return ciphertext, iv
+        print("[PWD] encrypt_password: plaintext_len={}, key_len={}".format(len(plaintext), len(key)))
+        print("[PWD]   key[0:4]={}".format(key[0:4].hex()))
+        max_attempts = 100  # Should succeed within a few tries
+        for attempt in range(max_attempts):
+            iv = PasswordCrypto.generate_iv()
+            # Use first 16 bytes of key for AES-128
+            cipher = Cipher(
+                algorithms.AES(key[:PasswordCrypto.ENCRYPTION_KEY_SIZE]),
+                modes.CTR(iv)
+            )
+            encryptor = cipher.encryptor()
+            ciphertext = encryptor.update(plaintext.encode("utf-8")) + encryptor.finalize()
+
+            # Check if ciphertext or IV contains NUL bytes (would break macro format)
+            if b'\x00' not in ciphertext and b'\x00' not in iv:
+                print("[PWD]   encrypted: cipher_len={}, iv[0:4]={}".format(len(ciphertext), iv[0:4].hex()))
+                return ciphertext, iv
+
+        # Fallback (should rarely happen)
+        raise RuntimeError("Failed to encrypt password without NUL bytes")
 
     @staticmethod
     def decrypt_password(ciphertext: bytes, key: bytes, iv: bytes) -> str:
         """
-        Decrypt a password using AES-256-GCM.
+        Decrypt a password using AES-128-CTR to match firmware.
 
         Args:
             ciphertext: The encrypted password bytes
-            key: 32-byte encryption key
+            key: 32-byte encryption key (first 16 bytes used)
             iv: The initialization vector used during encryption
 
         Returns:
             The decrypted password string
-
-        Raises:
-            cryptography.exceptions.InvalidTag: If decryption fails
         """
-        aesgcm = AESGCM(key)
-        plaintext = aesgcm.decrypt(iv, ciphertext, None)
+        # Use first 16 bytes of key for AES-128
+        cipher = Cipher(
+            algorithms.AES(key[:PasswordCrypto.ENCRYPTION_KEY_SIZE]),
+            modes.CTR(iv)
+        )
+        decryptor = cipher.decryptor()
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
         return plaintext.decode("utf-8")
 
     @staticmethod

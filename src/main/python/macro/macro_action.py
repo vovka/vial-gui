@@ -183,20 +183,30 @@ class ActionPassword(BasicAction):
         """
         Serialize for EEPROM storage.
 
-        Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_high + len_low + data
-        where data = salt (16) + iv (12) + encrypted_data (variable)
+        Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_lo+1 + len_hi+1 + encrypted_data + iv(16)
+        Note: Length bytes use +1 encoding to avoid 0x00 (NUL is macro separator).
+        Note: Salt is stored separately in keyboard NVM, not per-macro.
         """
         from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS
         if vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
             raise RuntimeError("ActionPassword requires vial_protocol >= 7")
 
-        blob = self.salt + self.iv + self.encrypted_data
-        length = len(blob)
-        if length > 65535:
+        cipher_len = len(self.encrypted_data)
+        if cipher_len > 65534:  # Max 65534 because we add 1 to each byte
             raise RuntimeError("Password data too large")
 
-        return struct.pack(">BBHH", SS_QMK_PREFIX, SS_PASSWORD_CODE,
-                           length, len(self.encrypted_data)) + blob
+        # Encode length with +1 to avoid 0x00 bytes (like delay encoding)
+        len_lo = (cipher_len & 0xFF) + 1
+        len_hi = ((cipher_len >> 8) & 0xFF) + 1
+
+        print("[PWD] ActionPassword.serialize: cipher_len={}, iv_len={}".format(cipher_len, len(self.iv)))
+        print("[PWD]   encrypted[0:4]={}, iv[0:4]={}".format(
+            self.encrypted_data[0:4].hex() if self.encrypted_data else "empty",
+            self.iv[0:4].hex() if self.iv else "empty"))
+
+        # Format: [prefix][code][len_lo+1][len_hi+1][data][iv]
+        return struct.pack("BBBB", SS_QMK_PREFIX, SS_PASSWORD_CODE,
+                           len_lo, len_hi) + self.encrypted_data + self.iv
 
     def save(self):
         """Save encrypted form (for .vil files)."""

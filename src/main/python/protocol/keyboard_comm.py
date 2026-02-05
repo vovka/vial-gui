@@ -553,14 +553,23 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
         """
         from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS, CMD_VIAL_PASSWORD_UNLOCK
         if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            print("[PWD] password_session_unlock: protocol {} < {} (not supported)".format(
+                self.vial_protocol, VIAL_PROTOCOL_PASSWORD_MACROS))
             return
 
+        print("[PWD] password_session_unlock: sending 32-byte derived key")
+        print("[PWD]   key[0:4] = {}".format(derived_key[0:4].hex()))
+
         # Send key in two 16-byte chunks (HID packet limit is 32 bytes)
-        # Format: CMD_VIA_VIAL_PREFIX + CMD_VIAL_PASSWORD_UNLOCK + chunk_index + 16 bytes
-        self.usb_send(self.dev, struct.pack("BBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 0) + derived_key[0:16],
+        # Format: CMD_VIA_VIAL_PREFIX + CMD_VIAL_PASSWORD_UNLOCK + chunk_offset + chunk_length + key_bytes
+        # First chunk: offset=0, length=16
+        resp1 = self.usb_send(self.dev, struct.pack("BBBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 0, 16) + derived_key[0:16],
                       retries=20)
-        self.usb_send(self.dev, struct.pack("BBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 1) + derived_key[16:32],
+        print("[PWD]   chunk 1 response: {}".format(resp1[0] if resp1 else "None"))
+        # Second chunk: offset=16, length=16
+        resp2 = self.usb_send(self.dev, struct.pack("BBBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 16, 16) + derived_key[16:32],
                       retries=20)
+        print("[PWD]   chunk 2 response: {} (1=success)".format(resp2[0] if resp2 else "None"))
 
     def password_session_lock(self):
         """Tell keyboard to clear decrypted passwords from RAM."""
