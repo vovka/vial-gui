@@ -18,7 +18,7 @@ class TestPasswordCrypto(unittest.TestCase):
 
     def test_generate_iv(self):
         iv = PasswordCrypto.generate_iv()
-        self.assertEqual(len(iv), 12)
+        self.assertEqual(len(iv), 16)  # AES-CTR uses 16-byte IV to match firmware
 
     def test_derive_key(self):
         password = "test_password"
