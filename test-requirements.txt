@@ -15,3 +15,4 @@ https://github.com/danthedeckie/simpleeval/archive/41c99b8e224a7a0ae0ac59c773598
 sip==4.19.8
 pywin32==303; sys_platform == 'win32'
 certifi
+cryptography>=3.4.0
