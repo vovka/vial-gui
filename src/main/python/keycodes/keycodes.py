@@ -122,7 +122,7 @@ class Keycode:
     @classmethod
     def serialize(cls, code):
         """ Converts integer keycode to string """
-        if cls.protocol == 6:
+        if cls.protocol >= 6:
             masked = keycodes_v6.masked
         else:
             masked = keycodes_v5.masked
@@ -165,7 +165,7 @@ class Keycode:
     @classmethod
     def resolve(cls, qmk_constant):
         """ Translates a qmk_constant into firmware-specific integer keycode or macro constant """
-        if cls.protocol == 6:
+        if cls.protocol >= 6:
             kc = keycodes_v6.kc
         else:
             kc = keycodes_v5.kc

@@ -3,8 +3,8 @@
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtWidgets import QHBoxLayout, QToolButton, QComboBox
 
-from macro.macro_action_ui import ActionTextUI, ActionDownUI, ActionUpUI, ActionTapUI, ActionDelayUI
-from protocol.constants import VIAL_PROTOCOL_ADVANCED_MACROS
+from macro.macro_action_ui import ActionTextUI, ActionDownUI, ActionUpUI, ActionTapUI, ActionDelayUI, ActionPasswordUI
+from protocol.constants import VIAL_PROTOCOL_ADVANCED_MACROS, VIAL_PROTOCOL_PASSWORD_MACROS
 
 
 class MacroLine(QObject):
@@ -23,6 +23,10 @@ class MacroLine(QObject):
         if self.parent.parent.keyboard.vial_protocol >= VIAL_PROTOCOL_ADVANCED_MACROS:
             self.types = self.types[:] + ["Delay (ms)"]
             self.type_to_cls = self.type_to_cls[:] + [ActionDelayUI]
+
+        if self.parent.parent.keyboard.vial_protocol >= VIAL_PROTOCOL_PASSWORD_MACROS:
+            self.types = self.types[:] + ["Password"]
+            self.type_to_cls = self.type_to_cls[:] + [ActionPasswordUI]
 
         self.arrows = QHBoxLayout()
         self.btn_up = QToolButton()

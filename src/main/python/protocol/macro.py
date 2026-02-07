@@ -2,7 +2,8 @@ import struct
 
 from keycodes.keycodes import Keycode
 from macro.macro_action import SS_TAP_CODE, SS_DOWN_CODE, SS_UP_CODE, ActionText, ActionTap, ActionDown, ActionUp, \
-    SS_QMK_PREFIX, SS_DELAY_CODE, ActionDelay, VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, VIAL_MACRO_EXT_UP
+    SS_QMK_PREFIX, SS_DELAY_CODE, ActionDelay, VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, VIAL_MACRO_EXT_UP, \
+    SS_PASSWORD_CODE, ActionPassword
 from macro.macro_action_ui import tag_to_action
 from protocol.base_protocol import BaseProtocol
 from protocol.constants import CMD_VIA_MACRO_GET_COUNT, CMD_VIA_MACRO_GET_BUFFER_SIZE, CMD_VIA_MACRO_GET_BUFFER, \
@@ -103,6 +104,31 @@ def macro_deserialize_v2(data):
 
                 for x in range(4):
                     data.pop(0)
+            elif act == SS_PASSWORD_CODE:
+                # Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_lo+1 + len_hi+1 + encrypted + iv(16)
+                # Length bytes use +1 encoding to avoid 0x00 (NUL is macro separator)
+                IV_SIZE = 16
+                if len(data) < 4:
+                    break
+
+                # Decode length (each byte has +1 encoding)
+                len_lo = data[2] - 1
+                len_hi = data[3] - 1
+                cipher_len = len_lo | (len_hi << 8)
+                total_len = 4 + cipher_len + IV_SIZE
+
+                if len(data) < total_len:
+                    break
+
+                encrypted_data = bytes(data[4:4 + cipher_len])
+                iv = bytes(data[4 + cipher_len:4 + cipher_len + IV_SIZE])
+                # Salt is stored separately in keyboard NVM, not per-macro
+                salt = b""
+
+                sequence.append([SS_PASSWORD_CODE, encrypted_data, salt, iv])
+
+                for x in range(total_len):
+                    data.pop(0)
             else:
                 # it is clearly malformed, just skip this byte and hope for the best
                 data.pop(0)
@@ -120,18 +146,26 @@ def macro_deserialize_v2(data):
         if isinstance(s, str):
             out.append(ActionText(s))
         else:
-            args = None
-            if s[0] in [SS_TAP_CODE, SS_DOWN_CODE, SS_UP_CODE]:
-                args = s[1]
-                if args is not None:
-                    args = [Keycode.serialize(kc) for kc in args]
-            elif s[0] == SS_DELAY_CODE:
-                args = s[1]
+            if s[0] == SS_PASSWORD_CODE:
+                # s = [SS_PASSWORD_CODE, encrypted_data, salt, iv]
+                out.append(ActionPassword(
+                    encrypted_data=s[1],
+                    salt=s[2],
+                    iv=s[3]
+                ))
+            else:
+                args = None
+                if s[0] in [SS_TAP_CODE, SS_DOWN_CODE, SS_UP_CODE]:
+                    args = s[1]
+                    if args is not None:
+                        args = [Keycode.serialize(kc) for kc in args]
+                elif s[0] == SS_DELAY_CODE:
+                    args = s[1]
 
-            if args is not None:
-                cls = {SS_TAP_CODE: ActionTap, SS_DOWN_CODE: ActionDown, SS_UP_CODE: ActionUp,
-                       SS_DELAY_CODE: ActionDelay}[s[0]]
-                out.append(cls(args))
+                if args is not None:
+                    cls = {SS_TAP_CODE: ActionTap, SS_DOWN_CODE: ActionDown, SS_UP_CODE: ActionUp,
+                           SS_DELAY_CODE: ActionDelay}[s[0]]
+                    out.append(cls(args))
     return out
 
 

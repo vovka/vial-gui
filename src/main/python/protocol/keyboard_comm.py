@@ -26,7 +26,7 @@ from unlocker import Unlocker
 from util import MSG_LEN, hid_send
 
 SUPPORTED_VIA_PROTOCOL = [-1, 9]
-SUPPORTED_VIAL_PROTOCOL = [-1, 0, 1, 2, 3, 4, 5, 6]
+SUPPORTED_VIAL_PROTOCOL = [-1, 0, 1, 2, 3, 4, 5, 6, 7]
 
 
 class ProtocolError(Exception):
@@ -543,3 +543,31 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
     def set_vialrgb_color(self, h, s, v):
         self.rgb_hsv = (h, s, v)
         self._vialrgb_set_mode()
+
+    def password_session_unlock(self, derived_key: bytes):
+        """
+        Send derived key to keyboard to unlock password macros for this session.
+
+        The keyboard will use this key to decrypt password macros in RAM
+        for execution until power cycle.
+        """
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS, CMD_VIAL_PASSWORD_UNLOCK
+        if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            return
+
+        # Send key in two 16-byte chunks (HID packet limit is 32 bytes)
+        # Format: CMD_VIA_VIAL_PREFIX + CMD_VIAL_PASSWORD_UNLOCK + chunk_offset + chunk_length + key_bytes
+        # First chunk: offset=0, length=16
+        self.usb_send(self.dev, struct.pack("BBBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 0, 16) + derived_key[0:16],
+                      retries=20)
+        # Second chunk: offset=16, length=16
+        self.usb_send(self.dev, struct.pack("BBBB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_UNLOCK, 16, 16) + derived_key[16:32],
+                      retries=20)
+
+    def password_session_lock(self):
+        """Tell keyboard to clear decrypted passwords from RAM."""
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS, CMD_VIAL_PASSWORD_LOCK
+        if self.vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            return
+
+        self.usb_send(self.dev, struct.pack("BB", CMD_VIA_VIAL_PREFIX, CMD_VIAL_PASSWORD_LOCK), retries=20)

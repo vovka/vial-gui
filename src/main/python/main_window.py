@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+import base64
 import logging
 import platform
 from json import JSONDecodeError
@@ -200,6 +201,15 @@ class MainWindow(QMainWindow):
         keyboard_reset_act.setShortcut("Ctrl+B")
         keyboard_reset_act.triggered.connect(self.reboot_to_bootloader)
 
+        self.password_setup_act = QAction(tr("MenuSecurity", "Set Master Password..."), self)
+        self.password_setup_act.triggered.connect(self.setup_master_password)
+
+        self.password_unlock_act = QAction(tr("MenuSecurity", "Unlock Password Session..."), self)
+        self.password_unlock_act.triggered.connect(self.unlock_password_session)
+
+        self.password_lock_act = QAction(tr("MenuSecurity", "Lock Password Session"), self)
+        self.password_lock_act.triggered.connect(self.lock_password_session)
+
         keyboard_layout_menu = self.menuBar().addMenu(tr("Menu", "Keyboard layout"))
         keymap_group = QActionGroup(self)
         selected_keymap = self.settings.value("keymap")
@@ -301,6 +311,10 @@ class MainWindow(QMainWindow):
         self.security_menu.addAction(keyboard_lock_act)
         self.security_menu.addSeparator()
         self.security_menu.addAction(keyboard_reset_act)
+        self.security_menu.addSeparator()
+        self.security_menu.addAction(self.password_setup_act)
+        self.security_menu.addAction(self.password_unlock_act)
+        self.security_menu.addAction(self.password_lock_act)
 
         if sys.platform != "emscripten":
             self.theme_menu = self.menuBar().addMenu(tr("Menu", "Theme"))
@@ -626,6 +640,89 @@ class MainWindow(QMainWindow):
         self.about_dialog = AboutKeyboard(self.autorefresh.current_device)
         self.about_dialog.setModal(True)
         self.about_dialog.show()
+
+    def _get_keyboard_uid_hex(self):
+        """Get current keyboard UID as hex string for settings key."""
+        if not isinstance(self.autorefresh.current_device, VialKeyboard):
+            return None
+        uid = self.autorefresh.current_device.keyboard.keyboard_id
+        return "{:016x}".format(uid)
+
+    def setup_master_password(self):
+        """Set up or change the master password for password macros."""
+        from widgets.master_password_dialog import MasterPasswordDialog
+        from password_session import PasswordSession
+
+        uid_hex = self._get_keyboard_uid_hex()
+        if uid_hex is None:
+            return
+
+        dialog = MasterPasswordDialog(self, mode=MasterPasswordDialog.MODE_SETUP)
+        if dialog.exec_() == QDialog.Accepted:
+            password = dialog.get_password()
+            session = PasswordSession.instance()
+            password_hash, salt = session.setup(password)
+
+            # Store hash and salt in settings
+            self.settings.setValue("password_macros/{}/master_hash".format(uid_hex),
+                                   base64.b64encode(password_hash).decode("ascii"))
+            self.settings.setValue("password_macros/{}/master_salt".format(uid_hex),
+                                   base64.b64encode(salt).decode("ascii"))
+
+            # Send key to keyboard
+            if isinstance(self.autorefresh.current_device, VialKeyboard):
+                self.autorefresh.current_device.keyboard.password_session_unlock(session.get_key())
+
+            self.rebuild()
+
+    def unlock_password_session(self):
+        """Unlock the password session with the master password."""
+        from widgets.master_password_dialog import MasterPasswordDialog
+        from password_session import PasswordSession
+
+        uid_hex = self._get_keyboard_uid_hex()
+        if uid_hex is None:
+            return
+
+        # Check if master password is set up
+        stored_hash_b64 = self.settings.value("password_macros/{}/master_hash".format(uid_hex))
+        stored_salt_b64 = self.settings.value("password_macros/{}/master_salt".format(uid_hex))
+
+        if not stored_hash_b64 or not stored_salt_b64:
+            QMessageBox.information(self, "Password Session",
+                                    "No master password has been set up for this keyboard.\n"
+                                    "Use 'Set Master Password...' first.")
+            return
+
+        stored_hash = base64.b64decode(stored_hash_b64)
+        stored_salt = base64.b64decode(stored_salt_b64)
+
+        dialog = MasterPasswordDialog(self, mode=MasterPasswordDialog.MODE_UNLOCK)
+        while dialog.exec_() == QDialog.Accepted:
+            password = dialog.get_password()
+            session = PasswordSession.instance()
+
+            if session.unlock(password, stored_hash, stored_salt):
+                # Send key to keyboard
+                if isinstance(self.autorefresh.current_device, VialKeyboard):
+                    self.autorefresh.current_device.keyboard.password_session_unlock(session.get_key())
+                self.rebuild()
+                return
+            else:
+                dialog.set_error("Incorrect password")
+
+    def lock_password_session(self):
+        """Lock the password session and clear keys from memory."""
+        from password_session import PasswordSession
+
+        session = PasswordSession.instance()
+        session.lock()
+
+        # Tell keyboard to clear decrypted passwords
+        if isinstance(self.autorefresh.current_device, VialKeyboard):
+            self.autorefresh.current_device.keyboard.password_session_lock()
+
+        self.rebuild()
 
     def closeEvent(self, e):
         self.settings.setValue("size", self.size())

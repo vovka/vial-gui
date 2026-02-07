@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+import base64
 import struct
 
 from keycodes.keycodes import Keycode
@@ -13,6 +14,7 @@ SS_DELAY_CODE = 4
 VIAL_MACRO_EXT_TAP = 5
 VIAL_MACRO_EXT_DOWN = 6
 VIAL_MACRO_EXT_UP = 7
+SS_PASSWORD_CODE = 8
 
 
 class BasicAction:
@@ -157,3 +159,71 @@ class ActionDelay(BasicAction):
 
     def __eq__(self, other):
         return super().__eq__(other) and self.delay == other.delay
+
+
+class ActionPassword(BasicAction):
+    """
+    Password macro action that stores encrypted passwords.
+
+    Passwords are encrypted with the master password key and stored
+    in EEPROM. They are only decrypted when the user unlocks the
+    password session in the GUI.
+    """
+
+    tag = "password"
+
+    def __init__(self, encrypted_data=b"", salt=b"", iv=b""):
+        super().__init__()
+        self.encrypted_data = encrypted_data
+        self.salt = salt
+        self.iv = iv
+        self._decrypted_text = None  # Cached plaintext (only in RAM)
+
+    def serialize(self, vial_protocol):
+        """
+        Serialize for EEPROM storage.
+
+        Format: SS_QMK_PREFIX + SS_PASSWORD_CODE + len_lo+1 + len_hi+1 + encrypted_data + iv(16)
+        Note: Length bytes use +1 encoding to avoid 0x00 (NUL is macro separator).
+        Note: Salt is stored separately in keyboard NVM, not per-macro.
+        """
+        from protocol.constants import VIAL_PROTOCOL_PASSWORD_MACROS
+        if vial_protocol < VIAL_PROTOCOL_PASSWORD_MACROS:
+            raise RuntimeError("ActionPassword requires vial_protocol >= 7")
+
+        cipher_len = len(self.encrypted_data)
+        if cipher_len > 65534:  # Max 65534 because we add 1 to each byte
+            raise RuntimeError("Password data too large")
+
+        # Encode length with +1 to avoid 0x00 bytes (like delay encoding)
+        len_lo = (cipher_len & 0xFF) + 1
+        len_hi = ((cipher_len >> 8) & 0xFF) + 1
+
+        # Format: [prefix][code][len_lo+1][len_hi+1][data][iv]
+        return struct.pack("BBBB", SS_QMK_PREFIX, SS_PASSWORD_CODE,
+                           len_lo, len_hi) + self.encrypted_data + self.iv
+
+    def save(self):
+        """Save encrypted form (for .vil files)."""
+        return [
+            self.tag,
+            base64.b64encode(self.encrypted_data).decode("ascii"),
+            base64.b64encode(self.salt).decode("ascii"),
+            base64.b64encode(self.iv).decode("ascii")
+        ]
+
+    def restore(self, act):
+        """Restore from saved format."""
+        super().restore(act)
+        self.encrypted_data = base64.b64decode(act[1])
+        self.salt = base64.b64decode(act[2])
+        self.iv = base64.b64decode(act[3])
+
+    def __eq__(self, other):
+        return (super().__eq__(other) and
+                self.encrypted_data == other.encrypted_data and
+                self.salt == other.salt and
+                self.iv == other.iv)
+
+    def __repr__(self):
+        return "{}<encrypted:{} bytes>".format(self.tag, len(self.encrypted_data))

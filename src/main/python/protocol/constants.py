@@ -65,3 +65,9 @@ VIAL_PROTOCOL_QMK_SETTINGS = 4
 # When did we get support for 2-byte macros
 VIAL_PROTOCOL_EXT_MACROS = 5
 VIAL_PROTOCOL_KEY_OVERRIDE = 5
+# When did we get support for password macros
+VIAL_PROTOCOL_PASSWORD_MACROS = 7
+
+# Password macro session commands
+CMD_VIAL_PASSWORD_UNLOCK = 0x0E
+CMD_VIAL_PASSWORD_LOCK = 0x0F
