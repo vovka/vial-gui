@@ -8,9 +8,11 @@ import math
 
 from editor.basic_editor import BasicEditor
 from editor.key_fade_manager import KeyFadeManager
+from editor.matrix_layer_manager import MatrixLayerManager
 from protocol.constants import VIAL_PROTOCOL_MATRIX_TESTER
 from widgets.keyboard_widget import KeyboardWidget
-from util import tr
+from widgets.square_button import SquareButton
+from util import tr, KeycodeDisplay
 from vial_device import VialKeyboard
 from unlocker import Unlocker
 
@@ -31,9 +33,20 @@ class MatrixTest(BasicEditor):
         self.fade_checkbox.setToolTip(
             tr("MatrixTest", "When enabled, key highlights fade out after release")
         )
+        self.show_keycodes_checkbox = QCheckBox(tr("MatrixTest", "Show keycodes"))
+        self.show_keycodes_checkbox.setToolTip(
+            tr("MatrixTest", "Display actual keycodes on keys for the current layer")
+        )
+        self.show_keycodes_checkbox.setChecked(True)
+        self.show_keycodes_checkbox.stateChanged.connect(self.on_show_keycodes_changed)
 
         self.fade_manager = KeyFadeManager(fade_duration=2.0)
+        self.layer_manager = MatrixLayerManager()
         self.previous_pressed = {}
+
+        self.layer_buttons = []
+        self.layout_layers = QHBoxLayout()
+        layer_label = QLabel(tr("MatrixTest", "Layer"))
 
         layout = QVBoxLayout()
         layout.addWidget(self.keyboardWidget)
@@ -42,12 +55,15 @@ class MatrixTest(BasicEditor):
         self.addLayout(layout)
 
         btn_layout = QHBoxLayout()
+        btn_layout.addWidget(layer_label)
+        btn_layout.addLayout(self.layout_layers)
         btn_layout.addStretch()
         self.unlock_lbl = QLabel(tr("MatrixTest", "Unlock the keyboard before testing:"))
         btn_layout.addWidget(self.unlock_lbl)
         btn_layout.addWidget(self.unlock_btn)
         btn_layout.addWidget(self.reset_btn)
         btn_layout.addWidget(self.fade_checkbox)
+        btn_layout.addWidget(self.show_keycodes_checkbox)
         self.addLayout(btn_layout)
 
         self.keyboard = None
@@ -59,6 +75,7 @@ class MatrixTest(BasicEditor):
 
         self.unlock_btn.clicked.connect(self.unlock)
         self.reset_btn.clicked.connect(self.reset_keyboard_widget)
+        self.layout_editor.changed.connect(self.on_layout_changed)
 
         self.grabber = QWidget()
 
@@ -66,9 +83,69 @@ class MatrixTest(BasicEditor):
         super().rebuild(device)
         if self.valid():
             self.keyboard = device.keyboard
+            self.layer_manager.set_keyboard(self.keyboard)
 
             self.keyboardWidget.set_keys(self.keyboard.keys, self.keyboard.encoders)
+            self.rebuild_layer_buttons()
+            self.refresh_keycodes_display()
         self.keyboardWidget.setEnabled(self.valid())
+
+    def rebuild_layer_buttons(self):
+        for btn in self.layer_buttons:
+            btn.hide()
+            btn.deleteLater()
+        self.layer_buttons = []
+
+        for x in range(self.keyboard.layers):
+            btn = SquareButton(str(x))
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setRelSize(1.667)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda state, idx=x: self.switch_layer(idx))
+            self.layout_layers.addWidget(btn)
+            self.layer_buttons.append(btn)
+
+        self.update_layer_buttons()
+
+    def switch_layer(self, idx):
+        self.layer_manager.current_layer = idx
+        self.update_layer_buttons()
+        self.refresh_keycodes_display()
+
+    def update_layer_buttons(self):
+        current = self.layer_manager.current_layer
+        for idx, btn in enumerate(self.layer_buttons):
+            btn.setEnabled(idx != current)
+            btn.setChecked(idx == current)
+
+    def refresh_keycodes_display(self):
+        if not self.keyboard or not self.show_keycodes_checkbox.isChecked():
+            self.clear_keycodes_display()
+            return
+
+        for widget in self.keyboardWidget.widgets:
+            code = self.layer_manager.get_keycode_for_widget(widget)
+            if code:
+                KeycodeDisplay.display_keycode(widget, code)
+
+        self.keyboardWidget.update()
+
+    def clear_keycodes_display(self):
+        for widget in self.keyboardWidget.widgets:
+            widget.setText("")
+            widget.setMaskText("")
+            widget.setToolTip("")
+            widget.masked = False
+        self.keyboardWidget.update()
+
+    def on_show_keycodes_changed(self, state):
+        self.refresh_keycodes_display()
+
+    def on_layout_changed(self):
+        if self.keyboard is None:
+            return
+        self.keyboardWidget.update_layout()
+        self.refresh_keycodes_display()
 
     def valid(self):
         # Check if vial protocol is v3 or later
@@ -78,12 +155,15 @@ class MatrixTest(BasicEditor):
 
     def reset_keyboard_widget(self):
         self.fade_manager.reset()
+        self.layer_manager.reset()
         self.previous_pressed.clear()
         for w in self.keyboardWidget.widgets:
             w.setPressed(False)
             w.setOn(False)
             w.setHighlightIntensity(0.0)
 
+        self.update_layer_buttons()
+        self.refresh_keycodes_display()
         self.keyboardWidget.update_layout()
         self.keyboardWidget.update()
         self.keyboardWidget.updateGeometry()
@@ -142,6 +222,8 @@ class MatrixTest(BasicEditor):
 
         # write matrix state to keyboard widget
         fade_enabled = self.fade_checkbox.isChecked()
+        layer_changed = False
+
         for w in self.keyboardWidget.widgets:
             if w.desc.row is not None and w.desc.col is not None:
                 row = w.desc.row
@@ -159,10 +241,20 @@ class MatrixTest(BasicEditor):
                     elif fade_enabled and was_pressed and not is_pressed:
                         self.fade_manager.start_fade(w)
 
+                    # Detect layer key state changes
+                    if is_pressed != was_pressed:
+                        if self.layer_manager.process_key_press(w, is_pressed):
+                            layer_changed = True
+
                     self.previous_pressed[w] = is_pressed
 
         self.fade_manager.update()
-        self.keyboardWidget.update()
+
+        if layer_changed:
+            self.update_layer_buttons()
+            self.refresh_keycodes_display()
+        else:
+            self.keyboardWidget.update()
 
     def unlock(self):
         Unlocker.unlock(self.keyboard)
