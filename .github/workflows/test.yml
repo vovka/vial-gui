@@ -23,6 +23,7 @@ jobs:
         export LD_LIBRARY_PATH=$(pwd)/util/python36/prefix/lib/
         ./util/python36/prefix/bin/python3 -m venv venv
         . venv/bin/activate
+        python -m pip install --upgrade "pip<22"
         pip install -r test-requirements.txt
 
     - name: Run tests
