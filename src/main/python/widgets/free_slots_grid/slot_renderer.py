@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtGui import QColor, QBrush, QPen
+from widgets.free_slots_grid.slot import SlotRegionType
+
+
+class SlotRenderer:
+    """Renders free slots as small pale rectangles."""
+
+    def __init__(self, slot_width=8.0, slot_height=6.0):
+        self.slot_width = slot_width
+        self.slot_height = slot_height
+        self._setup_styles()
+
+    def _setup_styles(self):
+        """Setup brushes and pens for slot rendering."""
+        self.fill_color = QColor(180, 180, 180, 40)
+        self.border_color = QColor(160, 160, 160, 60)
+
+        self.fill_brush = QBrush(self.fill_color)
+        self.fill_brush.setStyle(Qt.SolidPattern)
+
+        self.border_pen = QPen(self.border_color)
+        self.border_pen.setWidthF(0.5)
+
+        self.canvas_pen = QPen(QColor(255, 100, 100, 150))
+        self.canvas_pen.setWidthF(2.0)
+
+        self.region_pens = {
+            SlotRegionType.INTER_KEY: QPen(QColor(80, 200, 120, 180)),
+            SlotRegionType.INTERIOR: QPen(QColor(80, 160, 220, 180)),
+            SlotRegionType.EXTERIOR: QPen(QColor(220, 120, 80, 180)),
+            SlotRegionType.SPLIT_MIDDLE: QPen(QColor(180, 120, 220, 180)),
+        }
+        for pen in self.region_pens.values():
+            pen.setWidthF(0.9)
+
+    def render(self, painter, slots, scale=1.0, canvas_bounds=None):
+        """Render all slots as small pale rectangles."""
+        painter.save()
+        painter.scale(scale, scale)
+        painter.setRenderHint(painter.Antialiasing)
+
+        if canvas_bounds:
+            self._draw_canvas_border(painter, canvas_bounds)
+
+        if slots:
+            painter.setBrush(self.fill_brush)
+            for slot in slots:
+                pen = self.region_pens.get(slot.region_type, self.border_pen)
+                painter.setPen(pen)
+                rect = slot.get_rect(self.slot_width, self.slot_height)
+                painter.drawRect(rect)
+
+        if canvas_bounds:
+            self._draw_legend(painter, canvas_bounds)
+
+        painter.restore()
+
+    def _draw_canvas_border(self, painter, bounds):
+        """Draw the canvas boundary as a solid line."""
+        painter.setPen(self.canvas_pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(bounds)
+
+    def _draw_legend(self, painter, bounds):
+        font = painter.font()
+        font.setPointSizeF(max(6.0, font.pointSizeF() * 0.8))
+        painter.setFont(font)
+        legend_items = [
+            (SlotRegionType.INTER_KEY, "inter-key"),
+            (SlotRegionType.INTERIOR, "interior"),
+            (SlotRegionType.EXTERIOR, "exterior"),
+            (SlotRegionType.SPLIT_MIDDLE, "split-middle"),
+        ]
+        padding = 6.0
+        item_height = 12.0
+        box_size = 8.0
+        x = bounds.left() + padding
+        y = bounds.top() + padding
+        for region, label in legend_items:
+            pen = self.region_pens.get(region, self.border_pen)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(QRectF(x, y, box_size, box_size))
+            painter.drawText(QRectF(x + box_size + 4.0, y - 2.0, 80.0, item_height), Qt.AlignLeft, label)
+            y += item_height
+
+    def set_slot_size(self, width, height):
+        """Update the slot rectangle dimensions."""
+        self.slot_width = width
+        self.slot_height = height
