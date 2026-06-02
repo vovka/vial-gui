@@ -7,7 +7,8 @@ from PyQt5.QtCore import QSettings
 from protocol.dummy_keyboard import DummyKeyboard
 from editor import macro_recorder as macro_recorder_module
 from keycodes.keycodes import Keycode, recreate_keyboard_keycodes, update_macro_labels, \
-    get_macro_text_preview, get_macro_key_preview, get_macro_alias, format_macro_label, KEYCODES_MACRO
+    get_macro_text_preview, get_macro_key_preview, get_macro_alias, format_macro_label, KEYCODES_MACRO, \
+    update_tap_dance_labels, KEYCODES_TAP_DANCE
 from macro.macro_action import ActionTap, ActionDown, ActionText, ActionDelay, ActionUp
 from macro.macro_key import KeyDown, KeyTap, KeyUp, KeyString
 from macro.macro_optimizer import remove_repeats, replace_with_tap, replace_with_string
@@ -263,6 +264,21 @@ class TestMacro(unittest.TestCase):
         recorder._reload_tab = lambda index, actions: recorder.macro_tabs[index].replace_actions(actions)
         return recorder
 
+    def test_macro_reorder_helpers_move_aliases_with_macro_contents(self):
+        recorder = macro_recorder_module.MacroRecorder.__new__(macro_recorder_module.MacroRecorder)
+        cases = [
+            (False, [["macro-1"], ["macro-2"], ["macro-0"]], ["numbers", "symbols", "language switch"]),
+            (True, [["macro-2"], ["macro-1"], ["macro-0"]], ["symbols", "numbers", "language switch"]),
+        ]
+
+        for is_swap, expected_actions, expected_aliases in cases:
+            with self.subTest(is_swap=is_swap):
+                actions = [["macro-0"], ["macro-1"], ["macro-2"]]
+                aliases = ["language switch", "numbers", "symbols"]
+
+                self.assertEqual(recorder._reorder_items(actions, 0, 2, is_swap), expected_actions)
+                self.assertEqual(recorder._reorder_items(aliases, 0, 2, is_swap), expected_aliases)
+
     def test_macro_tab_reorder_moves_aliases_with_actions_without_persisting_them(self):
         settings = QSettings("Vial", "Vial")
         settings.remove("macro_aliases/unit-test-macro-recorder-alias-reorder")
@@ -308,6 +324,28 @@ class TestMacro(unittest.TestCase):
         refresh_clients.assert_called_once_with()
         self.assertEqual(recorder.keyboard.load_macro_aliases(), ["One", "Two", "Three"])
         settings.remove(recorder.keyboard._macro_alias_settings_key())
+
+    def test_tap_dance_labels_use_macro_aliases_instead_of_macro_content(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        kb.tap_dance_count = 1
+        kb.macro_count = 1
+        kb.macro_memory = 900
+        kb.macro_aliases = ["language switch"]
+        recreate_keyboard_keycodes(kb)
+
+        macro0 = kb.macro_serialize([ActionText("git log -1")])
+        kb.macro = macro0 + b"\x00"
+        kb.tap_dance_entries = [("M0", "KC_NO", "KC_NO", "KC_NO", 200)]
+
+        update_macro_labels(kb)
+        update_tap_dance_labels(kb)
+
+        label = KEYCODES_TAP_DANCE[0].label.replace("\n", " ")
+        self.assertIn("language switch", label)
+        self.assertNotIn("git log -1", label)
+        self.assertNotIn("git", KEYCODES_TAP_DANCE[0].label)
+        self.assertNotIn("log -1", KEYCODES_TAP_DANCE[0].label)
 
     def test_macro_alias_normalization_and_persistence(self):
         kb = DummyKeyboard(None)
@@ -372,7 +410,7 @@ class TestMacro(unittest.TestCase):
         kb.tap_dance_count = 0
         kb.macro_count = 4
         kb.macro_memory = 900
-        kb.macro_aliases = [""] * kb.macro_count
+        kb.macro_aliases = ["language switch", "", "", ""]
         recreate_keyboard_keycodes(kb)
 
         # Set up macros: one text macro, two keycode macros, one empty
@@ -384,11 +422,13 @@ class TestMacro(unittest.TestCase):
 
         update_macro_labels(kb)
 
-        # Macro 0 should have text preview and smaller font
+        # Macro 0 should prefer the alias and hide macro content previews
         self.assertTrue(KEYCODES_MACRO[0].label.startswith("M(0)\n"))
-        # Text wraps across lines, check parts are present
-        self.assertIn("git", KEYCODES_MACRO[0].label)
-        self.assertIn("log -1", KEYCODES_MACRO[0].label)
+        self.assertIn("language switch", KEYCODES_MACRO[0].label.replace("\n", " "))
+        self.assertNotIn("git log -1", KEYCODES_MACRO[0].label.replace("\n", " "))
+        self.assertNotIn("git", KEYCODES_MACRO[0].label)
+        self.assertNotIn("log -1", KEYCODES_MACRO[0].label)
+        self.assertNotIn("A B", KEYCODES_MACRO[0].label)
         self.assertEqual(KEYCODES_MACRO[0].font_scale, 0.7)
 
         # Macro 1 (keycode tap) should show key preview and smaller font
