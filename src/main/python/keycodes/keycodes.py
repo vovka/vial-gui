@@ -1069,23 +1069,50 @@ def format_macro_label(idx, preview, chars_per_line=8):
     return '\n'.join(lines)
 
 
+def get_macro_alias(keyboard, idx):
+    """Return a stripped macro alias, or None when the alias is missing/empty."""
+    aliases = getattr(keyboard, "macro_aliases", None)
+    if aliases is None:
+        return None
+
+    try:
+        if isinstance(aliases, dict):
+            alias = aliases.get(idx, aliases.get(str(idx)))
+        else:
+            alias = aliases[idx]
+    except (IndexError, KeyError, TypeError):
+        return None
+
+    if alias is None:
+        return None
+
+    alias = str(alias).strip()
+    return alias or None
+
+
 def update_macro_labels(keyboard):
     """
-    Update macro keycode labels with text or key action preview.
+    Update macro keycode labels with aliases, text, or key action previews.
     Should be called after macros are loaded (reload_macros_late).
     """
-    if not hasattr(keyboard, 'macro') or not keyboard.macro:
-        return
+    macro_count = min(getattr(keyboard, "macro_count", len(KEYCODES_MACRO)), len(KEYCODES_MACRO))
+    macros = []
+    if hasattr(keyboard, 'macro') and keyboard.macro:
+        # Deserialize all macros to get their content
+        macros = keyboard.macros_deserialize(keyboard.macro)
 
-    # Deserialize all macros to get their content
-    macros = keyboard.macros_deserialize(keyboard.macro)
+    for idx in range(macro_count):
+        macro_actions = macros[idx] if idx < len(macros) else []
+        kc = KEYCODES_MACRO[idx]
 
-    for idx, macro_actions in enumerate(macros):
-        if idx >= len(KEYCODES_MACRO):
-            break
+        alias = get_macro_alias(keyboard, idx)
+        if alias:
+            kc.label = format_macro_label(idx, alias)
+            kc.tooltip = 'Macro {}: {}'.format(idx, alias)
+            kc.font_scale = 0.7
+            continue
 
         preview = get_macro_text_preview(macro_actions)
-        kc = KEYCODES_MACRO[idx]
 
         if preview:
             # Update the label to show macro content with smaller font

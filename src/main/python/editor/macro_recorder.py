@@ -204,6 +204,7 @@ class MacroRecorder(BasicEditor):
         self.keyboard.set_macro(self.serialize())
         self.keyboard.save_macro_aliases(self.aliases())
         update_macro_labels(self.keyboard)
+        KeycodeDisplay.refresh_clients()
         self.on_change()
 
     def on_tabs_reordered(self, from_index, to_index, is_swap):

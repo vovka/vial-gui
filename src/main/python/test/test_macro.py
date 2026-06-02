@@ -5,7 +5,7 @@ from PyQt5.QtCore import QSettings
 
 from protocol.dummy_keyboard import DummyKeyboard
 from keycodes.keycodes import Keycode, recreate_keyboard_keycodes, update_macro_labels, \
-    get_macro_text_preview, get_macro_key_preview, format_macro_label, KEYCODES_MACRO
+    get_macro_text_preview, get_macro_key_preview, get_macro_alias, format_macro_label, KEYCODES_MACRO
 from macro.macro_action import ActionTap, ActionDown, ActionText, ActionDelay, ActionUp
 from macro.macro_key import KeyDown, KeyTap, KeyUp, KeyString
 from macro.macro_optimizer import remove_repeats, replace_with_tap, replace_with_string
@@ -232,12 +232,50 @@ class TestMacro(unittest.TestCase):
 
         settings.remove(kb._macro_alias_settings_key())
 
+    def test_get_macro_alias_ignores_missing_and_empty_aliases(self):
+        kb = DummyKeyboard(None)
+        kb.macro_count = 3
+        kb.macro_aliases = [" Build ", "", None]
+
+        self.assertEqual(get_macro_alias(kb, 0), "Build")
+        self.assertIsNone(get_macro_alias(kb, 1))
+        self.assertIsNone(get_macro_alias(kb, 2))
+        self.assertIsNone(get_macro_alias(kb, 3))
+
+        del kb.macro_aliases
+        self.assertIsNone(get_macro_alias(kb, 0))
+
+    def test_update_macro_labels_prefers_aliases_over_macro_content(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        kb.tap_dance_count = 0
+        kb.macro_count = 2
+        kb.macro_memory = 900
+        kb.macro_aliases = [" Build Firmware ", ""]
+        recreate_keyboard_keycodes(kb)
+
+        macro0 = kb.macro_serialize([ActionText("secret content")])
+        macro1 = kb.macro_serialize([ActionText("public content")])
+        kb.macro = macro0 + b"\x00" + macro1 + b"\x00"
+
+        update_macro_labels(kb)
+
+        self.assertEqual(KEYCODES_MACRO[0].label, "M(0)\nBuild\nFirmware")
+        self.assertEqual(KEYCODES_MACRO[0].tooltip, "Macro 0: Build Firmware")
+        self.assertEqual(KEYCODES_MACRO[0].font_scale, 0.7)
+        self.assertNotIn("secret", KEYCODES_MACRO[0].label)
+        self.assertNotIn("secret", KEYCODES_MACRO[0].tooltip)
+
+        self.assertIn("public", KEYCODES_MACRO[1].label)
+        self.assertIn("public", KEYCODES_MACRO[1].tooltip)
+
     def test_update_macro_labels(self):
         kb = DummyKeyboard(None)
         kb.vial_protocol = 2
         kb.tap_dance_count = 0
         kb.macro_count = 4
         kb.macro_memory = 900
+        kb.macro_aliases = [""] * kb.macro_count
         recreate_keyboard_keycodes(kb)
 
         # Set up macros: one text macro, two keycode macros, one empty
