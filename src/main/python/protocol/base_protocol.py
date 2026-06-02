@@ -12,6 +12,7 @@ class BaseProtocol:
     macro_count = 0
     macro_memory = 0
     macro = b""
+    macro_aliases = []
 
     def _retrieve_dynamic_entries(self, cmd, count, fmt):
         out = []

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import unittest
 
+from PyQt5.QtCore import QSettings
+
 from protocol.dummy_keyboard import DummyKeyboard
 from keycodes.keycodes import Keycode, recreate_keyboard_keycodes, update_macro_labels, \
     get_macro_text_preview, get_macro_key_preview, format_macro_label, KEYCODES_MACRO
@@ -209,6 +211,26 @@ class TestMacro(unittest.TestCase):
 
         # Empty preview returns simple label
         self.assertEqual(format_macro_label(5, None), 'M(5)')
+
+    def test_macro_alias_normalization_and_persistence(self):
+        kb = DummyKeyboard(None)
+        kb.keyboard_id = "unit-test-macro-aliases"
+        kb.macro_count = 3
+
+        settings = QSettings("Vial", "Vial")
+        settings.remove(kb._macro_alias_settings_key())
+
+        self.assertEqual(kb.normalize_macro_aliases([" First ", 12]), ["First", "12", ""])
+
+        kb.save_macro_aliases([" First ", "Second", "Extra", "Ignored"])
+        self.assertEqual(kb.macro_aliases, ["First", "Second", "Extra"])
+
+        reloaded = DummyKeyboard(None)
+        reloaded.keyboard_id = kb.keyboard_id
+        reloaded.macro_count = 3
+        self.assertEqual(reloaded.load_macro_aliases(), ["First", "Second", "Extra"])
+
+        settings.remove(kb._macro_alias_settings_key())
 
     def test_update_macro_labels(self):
         kb = DummyKeyboard(None)

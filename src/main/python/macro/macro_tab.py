@@ -2,7 +2,7 @@
 import json
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QPushButton, QGridLayout, QHBoxLayout, QToolButton, QVBoxLayout, \
+from PyQt5.QtWidgets import QPushButton, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QToolButton, QVBoxLayout, \
     QWidget, QMenu, QScrollArea, QFrame
 
 from keycodes.keycodes import Keycode
@@ -27,6 +27,10 @@ class MacroTab(QVBoxLayout):
         self.parent = parent
 
         self.lines = []
+
+        self.alias_input = QLineEdit()
+        self.alias_input.setPlaceholderText(tr("MacroRecorder", "Optional macro alias"))
+        self.alias_input.textChanged.connect(self.on_change)
 
         self.container = QGridLayout()
 
@@ -60,6 +64,10 @@ class MacroTab(QVBoxLayout):
         self.btn_text_window.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.btn_text_window.clicked.connect(self.on_text_window)
 
+        layout_alias = QHBoxLayout()
+        layout_alias.addWidget(QLabel(tr("MacroRecorder", "Alias:")))
+        layout_alias.addWidget(self.alias_input)
+
         layout_buttons = QHBoxLayout()
         layout_buttons.addWidget(self.btn_text_window)
         layout_buttons.addStretch()
@@ -72,10 +80,17 @@ class MacroTab(QVBoxLayout):
         vbox.addLayout(self.container)
         vbox.addStretch()
 
+        self.addLayout(layout_alias)
         self.addWidget(make_scrollable(vbox))
         self.addLayout(layout_buttons)
 
         self.dlg_textbox = None
+
+    def alias(self):
+        return self.alias_input.text().strip()
+
+    def set_alias(self, alias):
+        self.alias_input.setText(alias or "")
 
     def add_action(self, act):
         if self.parent.keyboard.vial_protocol < VIAL_PROTOCOL_EXT_MACROS:
