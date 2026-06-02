@@ -263,46 +263,50 @@ class TestMacro(unittest.TestCase):
         recorder._reload_tab = lambda index, actions: recorder.macro_tabs[index].replace_actions(actions)
         return recorder
 
-    def test_macro_tab_reorder_moves_aliases_with_actions_and_persists_them(self):
+    def test_macro_tab_reorder_moves_aliases_with_actions_without_persisting_them(self):
         settings = QSettings("Vial", "Vial")
         settings.remove("macro_aliases/unit-test-macro-recorder-alias-reorder")
         recorder = self._macro_recorder_for_alias_reorder()
         expected_aliases = ["Two", "Three", "One"]
 
-        def assert_labels_refreshed_after_aliases_are_saved(keyboard):
+        def assert_labels_refreshed_after_aliases_are_updated(keyboard):
             self.assertEqual(keyboard.macro_aliases, expected_aliases)
 
         with patch.object(macro_recorder_module, "update_macro_labels",
-                          side_effect=assert_labels_refreshed_after_aliases_are_saved) as update_labels, \
+                          side_effect=assert_labels_refreshed_after_aliases_are_updated) as update_labels, \
                 patch.object(macro_recorder_module.KeycodeDisplay, "refresh_clients") as refresh_clients:
             recorder.on_tabs_reordered(0, 2, False)
 
         self.assertEqual([tab.alias() for tab in recorder.macro_tabs], expected_aliases)
         self.assertEqual([tab.actions() for tab in recorder.macro_tabs], [["action-1"], ["action-2"], ["action-0"]])
         self.assertEqual(recorder.keyboard.macro_aliases, expected_aliases)
-        self.assertEqual(recorder.keyboard.load_macro_aliases(), expected_aliases)
         self.assertEqual(recorder.tabs.current_index, 2)
         update_labels.assert_called_once_with(recorder.keyboard)
         refresh_clients.assert_called_once_with()
+        self.assertEqual(recorder.keyboard.load_macro_aliases(), ["One", "Two", "Three"])
         settings.remove(recorder.keyboard._macro_alias_settings_key())
 
-    def test_macro_tab_swap_swaps_aliases_with_actions_and_persists_them(self):
+    def test_macro_tab_swap_swaps_aliases_with_actions_without_persisting_them(self):
         settings = QSettings("Vial", "Vial")
         settings.remove("macro_aliases/unit-test-macro-recorder-alias-reorder")
         recorder = self._macro_recorder_for_alias_reorder()
         expected_aliases = ["Three", "Two", "One"]
 
-        with patch.object(macro_recorder_module, "update_macro_labels") as update_labels, \
+        def assert_labels_refreshed_after_aliases_are_updated(keyboard):
+            self.assertEqual(keyboard.macro_aliases, expected_aliases)
+
+        with patch.object(macro_recorder_module, "update_macro_labels",
+                          side_effect=assert_labels_refreshed_after_aliases_are_updated) as update_labels, \
                 patch.object(macro_recorder_module.KeycodeDisplay, "refresh_clients") as refresh_clients:
             recorder.on_tabs_reordered(0, 2, True)
 
         self.assertEqual([tab.alias() for tab in recorder.macro_tabs], expected_aliases)
         self.assertEqual([tab.actions() for tab in recorder.macro_tabs], [["action-2"], ["action-1"], ["action-0"]])
         self.assertEqual(recorder.keyboard.macro_aliases, expected_aliases)
-        self.assertEqual(recorder.keyboard.load_macro_aliases(), expected_aliases)
         self.assertEqual(recorder.tabs.current_index, 2)
         update_labels.assert_called_once_with(recorder.keyboard)
         refresh_clients.assert_called_once_with()
+        self.assertEqual(recorder.keyboard.load_macro_aliases(), ["One", "Two", "Three"])
         settings.remove(recorder.keyboard._macro_alias_settings_key())
 
     def test_macro_alias_normalization_and_persistence(self):

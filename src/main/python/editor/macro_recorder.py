@@ -213,7 +213,7 @@ class MacroRecorder(BasicEditor):
             return
         self._swap_keymap_references(from_index, to_index, is_swap)
         all_actions = self._collect_all_actions()
-        all_aliases = self._collect_all_aliases()
+        all_aliases = self.aliases()
         all_actions = self._reorder_items(all_actions, from_index, to_index, is_swap)
         all_aliases = self._reorder_items(all_aliases, from_index, to_index, is_swap)
         self._apply_reordered_actions(all_actions, all_aliases)
@@ -269,9 +269,6 @@ class MacroRecorder(BasicEditor):
     def _collect_all_actions(self):
         return [self.macro_tabs[i].actions()[:] for i in range(self.keyboard.macro_count)]
 
-    def _collect_all_aliases(self):
-        return [self.macro_tabs[i].alias() for i in range(self.keyboard.macro_count)]
-
     def _reorder_items(self, items, from_index, to_index, is_swap):
         if is_swap:
             items[from_index], items[to_index] = items[to_index], items[from_index]
@@ -291,9 +288,10 @@ class MacroRecorder(BasicEditor):
         KeycodeDisplay.refresh_clients()
 
     def _apply_reordered_aliases(self, all_aliases):
-        for alias, tab in zip(all_aliases, self.macro_tabs[:self.keyboard.macro_count]):
+        aliases = self.keyboard.normalize_macro_aliases(all_aliases)
+        for alias, tab in zip(aliases, self.macro_tabs[:self.keyboard.macro_count]):
             tab.set_alias(alias)
-        self.keyboard.save_macro_aliases(all_aliases)
+        self.keyboard.macro_aliases = aliases
 
     def _reload_tab(self, index, actions):
         tab = self.macro_tabs[index]
