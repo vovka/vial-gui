@@ -69,6 +69,7 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
         self.rgb_supported_effects = set()
 
         self.via_protocol = self.vial_protocol = self.keyboard_id = -1
+        self.macro_aliases = []
 
     def reload(self, sideload_json=None):
         """ Load information about the keyboard: number of layers, physical key layout """
@@ -399,6 +400,7 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
         data["encoder_layout"] = encoder_layout
         data["layout_options"] = self.layout_options
         data["macro"] = self.save_macro()
+        data["macro_aliases"] = self.normalize_macro_aliases()
         data["vial_protocol"] = self.vial_protocol
         data["via_protocol"] = self.via_protocol
         data["tap_dance"] = self.save_tap_dance()
@@ -429,6 +431,8 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
 
         self.set_layout_options(data["layout_options"])
         self.restore_macros(data.get("macro"))
+        if "macro_aliases" in data:
+            self.save_macro_aliases(data.get("macro_aliases"))
 
         self.restore_tap_dance(data.get("tap_dance", []))
         self.restore_combo(data.get("combo", []))

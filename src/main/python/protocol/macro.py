@@ -1,5 +1,7 @@
 import struct
 
+from PyQt5.QtCore import QSettings
+
 from keycodes.keycodes import Keycode
 from macro.macro_action import SS_TAP_CODE, SS_DOWN_CODE, SS_UP_CODE, ActionText, ActionTap, ActionDown, ActionUp, \
     SS_QMK_PREFIX, SS_DELAY_CODE, ActionDelay, VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, VIAL_MACRO_EXT_UP, \
@@ -171,10 +173,42 @@ def macro_deserialize_v2(data):
 
 class ProtocolMacro(BaseProtocol):
 
+    def _macro_alias_settings_key(self):
+        return "macro_aliases/{}".format(self.keyboard_id)
+
+    def normalize_macro_aliases(self, aliases=None):
+        if aliases is None:
+            aliases = getattr(self, "macro_aliases", [])
+        if isinstance(aliases, dict):
+            aliases = [aliases.get(x, aliases.get(str(x), "")) for x in range(self.macro_count)]
+        elif isinstance(aliases, tuple):
+            aliases = list(aliases)
+        elif not isinstance(aliases, list):
+            aliases = []
+        normalized = [
+            str(alias).strip() if alias is not None else ""
+            for alias in aliases[:self.macro_count]
+        ]
+        normalized += [""] * (self.macro_count - len(normalized))
+        return normalized
+
+    def load_macro_aliases(self):
+        settings = QSettings("Vial", "Vial")
+        aliases = settings.value(self._macro_alias_settings_key(), [])
+        self.macro_aliases = self.normalize_macro_aliases(aliases)
+        return self.macro_aliases
+
+    def save_macro_aliases(self, aliases=None):
+        self.macro_aliases = self.normalize_macro_aliases(aliases)
+        settings = QSettings("Vial", "Vial")
+        settings.setValue(self._macro_alias_settings_key(), self.macro_aliases)
+
     def reload_macros_early(self):
         """ Reload macro information that doesn't require any info about keycodes, i.e. number of macros """
         data = self.usb_send(self.dev, struct.pack("B", CMD_VIA_MACRO_GET_COUNT), retries=20)
         self.macro_count = data[1]
+        self.macro_aliases = [""] * self.macro_count
+        self.load_macro_aliases()
         data = self.usb_send(self.dev, struct.pack("B", CMD_VIA_MACRO_GET_BUFFER_SIZE), retries=20)
         self.macro_memory = struct.unpack(">H", data[1:3])[0]
 

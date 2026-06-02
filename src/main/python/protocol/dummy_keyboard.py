@@ -25,6 +25,8 @@ class DummyKeyboard(Keyboard):
 
     def reload_macros_early(self):
         self.macro_count = 16
+        self.macro_aliases = [""] * self.macro_count
+        self.load_macro_aliases()
         self.macro_memory = 900
 
     def reload_macros_late(self):

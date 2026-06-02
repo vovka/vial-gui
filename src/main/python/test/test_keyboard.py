@@ -1,6 +1,9 @@
 import unittest
 import lzma
 import struct
+import json
+
+from PyQt5.QtCore import QSettings
 
 from keycodes.keycodes import Keycode
 from protocol.keyboard_comm import Keyboard
@@ -170,6 +173,32 @@ class TestKeyboard(unittest.TestCase):
         kb.restore_layout(data)
         self.assertEqual(kb.layout[(1, 1, 0)], Keycode.serialize(10))
         dev.finish()
+
+    def test_layout_save_restore_macro_aliases(self):
+        """ Tests that macro aliases are included in layout backup and restored locally. """
+
+        settings_key_id = "unit-test-layout-macro-aliases"
+        settings = QSettings("Vial", "Vial")
+        settings.remove("macro_aliases/{}".format(settings_key_id))
+
+        kb, dev = self.prepare_keyboard(LAYOUT_2x2, [[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+        kb.keyboard_id = settings_key_id
+        kb.macro_count = 3
+        kb.macro = b"\x00" * kb.macro_count
+        kb.macro_aliases = ["Build", " Flash ", ""]
+        data = kb.save_layout()
+        self.assertEqual(json.loads(data.decode("utf-8"))["macro_aliases"], ["Build", "Flash", ""])
+        dev.finish()
+
+        kb, dev = self.prepare_keyboard(LAYOUT_2x2, [[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+        kb.keyboard_id = settings_key_id
+        kb.macro_count = 3
+        kb.macro_memory = 3
+        kb.macro = b"\x00" * kb.macro_count
+        kb.restore_layout(data)
+        self.assertEqual(kb.macro_aliases, ["Build", "Flash", ""])
+        dev.finish()
+        settings.remove("macro_aliases/{}".format(settings_key_id))
 
     def test_encoder_simple(self):
         """ Tests that we try to retrieve encoder layout """

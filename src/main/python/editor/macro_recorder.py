@@ -74,6 +74,8 @@ class MacroRecorder(BasicEditor):
             return
         self.keyboard = self.device.keyboard
 
+        self.keyboard.load_macro_aliases()
+
         for x in range(self.keyboard.macro_count - len(self.macro_tab_w)):
             tab = MacroTab(self, self.recorder is not None)
             tab.changed.connect(self.on_change)
@@ -90,7 +92,8 @@ class MacroRecorder(BasicEditor):
         for x, w in enumerate(self.macro_tab_w[:self.keyboard.macro_count]):
             self.tabs.addTab(w, "")
 
-        # deserialize macros that came from keyboard
+        # deserialize macros and aliases that came from keyboard/local settings
+        self.set_aliases(self.keyboard.macro_aliases)
         self.deserialize(self.keyboard.macro)
 
         self.on_change()
@@ -100,7 +103,8 @@ class MacroRecorder(BasicEditor):
         unused_macros = find_unused_macros(self.keyboard)
         for x, w in enumerate(self.macro_tab_w[:self.keyboard.macro_count]):
             title = "M{}".format(x)
-            if macros[x] != self.keyboard.macro_serialize(self.macro_tabs[x].actions()):
+            alias_changed = self.macro_tabs[x].alias() != self.keyboard.macro_aliases[x]
+            if macros[x] != self.keyboard.macro_serialize(self.macro_tabs[x].actions()) or alias_changed:
                 title += "*"
             is_free = len(self.macro_tabs[x].actions()) == 0
             needs_attention = x in unused_macros
@@ -157,9 +161,22 @@ class MacroRecorder(BasicEditor):
         data = self.serialize()
         memory = len(data)
         self.lbl_memory.setText("Memory used by macros: {}/{}".format(memory, self.keyboard.macro_memory))
-        self.btn_save.setEnabled(data != self.keyboard.macro and memory <= self.keyboard.macro_memory)
+        aliases_changed = self.aliases() != self.keyboard.macro_aliases
+        self.btn_save.setEnabled(
+            (data != self.keyboard.macro or aliases_changed) and memory <= self.keyboard.macro_memory
+        )
         self.lbl_memory.setStyleSheet("QLabel { color: red; }" if memory > self.keyboard.macro_memory else "")
         self.update_tab_titles()
+
+    def aliases(self):
+        return [tab.alias() for tab in self.macro_tabs[:self.keyboard.macro_count]]
+
+    def set_aliases(self, aliases):
+        aliases = self.keyboard.normalize_macro_aliases(aliases)
+        self.suppress_change = True
+        for alias, tab in zip(aliases, self.macro_tabs[:self.keyboard.macro_count]):
+            tab.set_alias(alias)
+        self.suppress_change = False
 
     def serialize(self):
         macros = []
@@ -178,12 +195,14 @@ class MacroRecorder(BasicEditor):
 
     def on_revert(self):
         self.keyboard.reload_macros()
+        self.set_aliases(self.keyboard.macro_aliases)
         self.deserialize(self.keyboard.macro)
         self.on_change()
 
     def on_save(self):
         Unlocker.unlock(self.device.keyboard)
         self.keyboard.set_macro(self.serialize())
+        self.keyboard.save_macro_aliases(self.aliases())
         update_macro_labels(self.keyboard)
         self.on_change()
 
@@ -193,8 +212,10 @@ class MacroRecorder(BasicEditor):
             return
         self._swap_keymap_references(from_index, to_index, is_swap)
         all_actions = self._collect_all_actions()
-        all_actions = self._reorder_actions(all_actions, from_index, to_index, is_swap)
-        self._apply_reordered_actions(all_actions)
+        all_aliases = self.aliases()
+        all_actions = self._reorder_items(all_actions, from_index, to_index, is_swap)
+        all_aliases = self._reorder_items(all_aliases, from_index, to_index, is_swap)
+        self._apply_reordered_actions_and_aliases(all_actions, all_aliases)
         self.tabs.setCurrentIndex(to_index)
 
     def _swap_keymap_references(self, from_idx, to_idx, is_swap):
@@ -247,18 +268,20 @@ class MacroRecorder(BasicEditor):
     def _collect_all_actions(self):
         return [self.macro_tabs[i].actions()[:] for i in range(self.keyboard.macro_count)]
 
-    def _reorder_actions(self, all_actions, from_index, to_index, is_swap):
+    def _reorder_items(self, items, from_index, to_index, is_swap):
         if is_swap:
-            all_actions[from_index], all_actions[to_index] = all_actions[to_index], all_actions[from_index]
+            items[from_index], items[to_index] = items[to_index], items[from_index]
         else:
-            actions = all_actions.pop(from_index)
-            all_actions.insert(to_index, actions)
-        return all_actions
+            item = items.pop(from_index)
+            items.insert(to_index, item)
+        return items
 
-    def _apply_reordered_actions(self, all_actions):
+    def _apply_reordered_actions_and_aliases(self, all_actions, all_aliases):
         self.suppress_change = True
         for i, actions in enumerate(all_actions):
             self._reload_tab(i, actions)
+        for alias, tab in zip(all_aliases, self.macro_tabs[:self.keyboard.macro_count]):
+            tab.set_alias(alias)
         self.suppress_change = False
         self.on_change()
         update_macro_labels(self.keyboard)
